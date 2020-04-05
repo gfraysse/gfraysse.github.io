@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuring Debian on a HP Proliant G7</title>
+<meta name="description" content="Geeking, testings and musings">
+
+<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" media="all" href="/css/style.css" />
+<link rel="stylesheet" type="text/css" media="all" href="/css/jquery.mmenu.all.css" />
+<link rel="stylesheet" href="/css/highlightjs.piperita.css">
+
+<!-- Favicons generated at http://realfavicongenerator.net/ -->
+<link rel="apple-touch-icon" sizes="57x57" href="/favicons/apple-touch-icon-57x57.png">
+<link rel="apple-touch-icon" sizes="60x60" href="/favicons/apple-touch-icon-60x60.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/favicons/apple-touch-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="/favicons/apple-touch-icon-76x76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/favicons/apple-touch-icon-114x114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="/favicons/apple-touch-icon-120x120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/favicons/apple-touch-icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/favicons/apple-touch-icon-152x152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon-180x180.png">
+<link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="/favicons/android-chrome-192x192.png" sizes="192x192">
+<link rel="icon" type="image/png" href="/favicons/favicon-96x96.png" sizes="96x96">
+<link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+<link rel="manifest" href="/favicons/manifest.json">
+<link rel="shortcut icon" href="/favicons/favicon.ico">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="msapplication-TileImage" content="/favicons/mstile-144x144.png">
+<meta name="msapplication-config" content="/favicons/browserconfig.xml">
+<meta name="theme-color" content="#ffffff">
+
+
+
+
+
+</head>
+
+
+    <body>
+
+    <nav id="my-menu">
+  <div>
+    <p>Geeking, testings and musings</p>
+
+    <ul class="pages">
+      <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="/posts/"><i class="fa fa-archive"></i> All Posts</a></li>
+      <li><a href="/search/"><i class="fa fa-search"></i> Search</a></li>
+    </ul>
+
+    <p class="links">
+  
+  <a href="https://www.linkedin.com/in/gfraysse/" target="_new"><i class="fa fa-linkedin"></i></a>
+  
+  
+  
+  <a href="https://github.com/gfraysse" target="_new"><i class="fa fa-github-alt"></i></a>
+  <a href="https://stackoverflow.com/users/10927519/gfraysse" target="_new"><i class="fa fa-stack-overflow"></i></a>
+  
+  
+  <a href="/feed.xml" target="_new"><i class="fa fa-rss"></i></a>
+</p>
+
+  </div>
+</nav>
+<div class="menu-button" href="#menu"><i class="fa fa-bars"></i></div>
+
+
+    <div class="page-content">
+      <div class="wrap">
+      
+
+<div class="container-fluid single">
+  <div class="row">
+
+    <div itemscope itemtype="http://schema.org/Article" class="col-md-12 article">
+      
+      <div class="thumb">
+        <i class="fa fa-cogs fa-4x"></i>
+      </div>
+      
+
+      <h1 class="header" itemprop="name">Configuring Debian on a HP Proliant G7</h1>
+
+      <div class="author">
+        <small><i>
+          
+          on <span itemprop="datePublished" content="2014-08-28">April 5, 2020</span>
+           under configuration
+        </i></small>
+      </div>
+
+      <div class="read-time">
+        <small>
+          11 minute read
+        </small>
+      </div>
+
+      <div class="content-panel content">
+
+        
+
+        <span itemprop="articleBody"><h2 id="hp-proliant-g7">HP Proliant G7</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /proc/cpuinfo
+	processor       : 23
+	vendor_id       : GenuineIntel
+	cpu family      : 6
+	model           : 44
+	model name      : Intel<span class="o">(</span>R<span class="o">)</span> Xeon<span class="o">(</span>R<span class="o">)</span> CPU           E5649  @ 2.53GHz
+	stepping        : 2
+	microcode       : 0x14
+	cpu MHz         : 1599.918
+	cache size      : 12288 KB
+	physical <span class="nb">id</span>     : 1
+	siblings        : 12
+	core <span class="nb">id</span>         : 9
+	cpu cores       : 6
+	apicid          : 51
+	initial apicid  : 51
+	fpu             : <span class="nb">yes
+	</span>fpu_exception   : <span class="nb">yes
+	</span>cpuid level     : 11
+	wp              : <span class="nb">yes
+	</span>flags           : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb r
+	dtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 cx1
+	6 xtpr pdcm pcid dca sse4_1 sse4_2 popcnt aes lahf_lm epb pti tpr_shadow vnmi flexpriority ept vpid dtherm ida arat
+	bugs            : cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs
+	bogomips        : 5064.77
+	clflush size    : 64
+	cache_alignment : 64
+	address sizes   : 40 bits physical, 48 bits virtual
+	power management:
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>free
+	total        used        free      shared  buff/cache   available
+	Mem:       16476980      288552    15807548        9560      380880    15858556
+	Swap:      16764924           0    16764924
+</code></pre></div></div>
+
+<p>debian packages at : http://downloads.linux.hpe.com/SDR/repo/mcp/Debian/pool/non-free/</p>
+
+<ul>
+  <li>hpssacli-2.40-13.0_amd64.deb</li>
+  <li>ssacli-3.40-3.0_amd64.deb</li>
+  <li>dpkg -i hpssacli-2.40-13.0_amd64.deb</li>
+  <li>
+    <p>dpkg -i ssacli-3.40-3.0_amd64.deb</p>
+  </li>
+  <li>https://pikedom.com/linux-server-monitoring-tools-for-hp-proliant/</li>
+  <li>https://dwaves.org/2019/09/08/linux-bash-hp-proliant-p410i-hardware-monitoring-monitor-and-mail-script/</li>
+  <li>https://www.unrelatedshit.com/2011/05/30/proliant-management-tools-for-ubuntu-debian/</li>
+  <li>https://dwaves.org/2019/09/05/linux-bash-how-to-find-hardware-raid-controller-get-info-about-hardware-hp-server-get-raid-and-power-watt-usage-status-from-command-line/</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>	<span class="nv">$ </span>ssacli ctrl all show config
+
+Smart Array P410i <span class="k">in </span>Slot 0 <span class="o">(</span>Embedded<span class="o">)</span>    <span class="o">(</span>sn: 50014380147532C0<span class="o">)</span>
+
+
+
+   Internal Drive Cage at Port 1I, Box 1, OK
+
+
+
+   Internal Drive Cage at Port 2I, Box 1, OK
+
+
+   Port Name: 1I
+
+   Port Name: 2I
+
+   Array A <span class="o">(</span>SAS, Unused Space: 0  MB<span class="o">)</span>
+
+      logicaldrive 1 <span class="o">(</span>558.76 GB, RAID 1, OK<span class="o">)</span>
+
+      physicaldrive 1I:1:3 <span class="o">(</span>port 1I:box 1:bay 3, SAS HDD, 600 GB, OK<span class="o">)</span>
+      physicaldrive 1I:1:4 <span class="o">(</span>port 1I:box 1:bay 4, SAS HDD, 600 GB, OK<span class="o">)</span>
+
+   SEP <span class="o">(</span>Vendor ID PMCSIERA, Model  SRC 8x6G<span class="o">)</span> 250  <span class="o">(</span>WWID: 50014380147532CF<span class="o">)</span>
+</code></pre></div></div>
+
+<p>package hp-health_10.80-1874.10_amd64.deb
+prerequisite: apt-get install lib32gcc1</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>	<span class="nv">$ </span>hplog <span class="nt">-t</span>
+	ID     TYPE        LOCATION      STATUS    CURRENT  THRESHOLD 
+1  Basic Sensor Ambient         Normal    53F/ 12C 105F/ 41C 
+2  Basic Sensor Processor Zone  Normal   104F/ 40C 179F/ 82C 
+3  Basic Sensor Processor Zone  Normal   104F/ 40C 179F/ 82C 
+4  Basic Sensor Memory Board    Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+5  Basic Sensor Memory Board    Normal    75F/ 24C 188F/ 87C 
+6  Basic Sensor Memory Board    Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+7  Basic Sensor Memory Board    Normal    77F/ 25C 188F/ 87C 
+8  Basic Sensor System Board    Normal    91F/ 33C 194F/ 90C 
+9  Basic Sensor System Board    Normal    80F/ 27C 149F/ 65C 
+10  Basic Sensor System Board    Normal    96F/ 36C 194F/ 90C 
+11  Basic Sensor System Board    Normal    78F/ 26C 158F/ 70C 
+12  Basic Sensor System Board    Normal   104F/ 40C 194F/ 90C 
+13  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+14  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+15  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+16  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+17  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+18  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+19  Basic Sensor System Board    Normal    64F/ 18C 158F/ 70C 
+20  Basic Sensor System Board    Normal    71F/ 22C 158F/ 70C 
+21  Basic Sensor System Board    Normal    80F/ 27C 176F/ 80C 
+22  Basic Sensor System Board    Normal    78F/ 26C 176F/ 80C 
+23  Basic Sensor System Board    Normal    95F/ 35C 170F/ 77C 
+24  Basic Sensor System Board    Normal    84F/ 29C 158F/ 70C 
+25  Basic Sensor System Board    Normal    73F/ 23C 158F/ 70C 
+26  Basic Sensor System Board    Normal    73F/ 23C 158F/ 70C 
+27  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+28  Basic Sensor I/O Zone        Normal   <span class="nt">---F</span>/---C <span class="nt">---F</span>/---C 
+29  Basic Sensor SCSI Backplane  Normal   122F/ 50C 140F/ 60C 
+30  Basic Sensor System Board    Normal   159F/ 71C 230F/110C 
+
+
+  <span class="nv">$ </span>lspci <span class="nt">-vvv</span> | <span class="nb">grep</span> <span class="nt">-i</span> raid
+05:00.0 RAID bus controller: Hewlett-Packard Company Smart Array G6 controllers <span class="o">(</span>rev 01<span class="o">)</span>
+
+	<span class="nv">$ </span>hpasmcli 
+HPE management CLI <span class="k">for </span>Linux <span class="o">(</span>v2.0<span class="o">)</span>
+Copyright 2015 Hewlett Packard Enterprise Development LP.
+<span class="nt">--------------------------------------------------------------------------</span>
+NOTE: Some hpasmcli commands may not be supported on all Proliant servers.
+      Type <span class="s1">'help'</span> to get a list of all top level commands.
+<span class="nt">--------------------------------------------------------------------------</span>
+hpasmcli&gt; SHOW POWERSUPPLY
+Power supply <span class="c">#1</span>
+        Present  : Yes
+        Redundant: No
+        Condition: FAILED
+        Hotplug  : Supported
+Power supply <span class="c">#2</span>
+        Present  : Yes
+        Redundant: No
+        Condition: Ok
+        Hotplug  : Supported
+        Power    : 95 Watts
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>dmidecode <span class="nt">--type</span> 17
+<span class="c"># dmidecode 3.2</span>
+Getting SMBIOS data from sysfs.
+SMBIOS 2.7 present.
+
+Handle 0x1100, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 1
+        Locator: PROC 1 DIMM 1G
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1101, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 2
+        Locator: PROC 1 DIMM 2D
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1102, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 3
+        Locator: PROC 1 DIMM 3A
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1103, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 4
+        Locator: PROC 1 DIMM 4H
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1104, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 5
+        Locator: PROC 1 DIMM 5E
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+Handle 0x1105, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 6
+        Locator: PROC 1 DIMM 6B
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x1106, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 7
+        Locator: PROC 1 DIMM 7I
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1107, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 8
+        Locator: PROC 1 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1108, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+       Set: 9
+        Locator: PROC 1 DIMM 9C
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x1109, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 10
+        Locator: PROC 2 DIMM 1G
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110A, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+       Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 11
+        Locator: PROC 2 DIMM 2D
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110B, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 12
+        Locator: PROC 2 DIMM 3A
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+       Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110C, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 13
+        Locator: PROC 2 DIMM 4H
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110D, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 14
+        Locator: PROC 2 DIMM 5E
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110E, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 15
+        Locator: PROC 2 DIMM 6B
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x110F, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 16
+        Locator: PROC 2 DIMM 7I
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1110, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 17
+        Locator: PROC 2 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+       Size: No Module Installed
+        Form Factor: DIMM
+        Set: 17
+        Locator: PROC 2 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1111, DMI <span class="nb">type </span>17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 18
+        Locator: PROC 2 DIMM 9C
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+</code></pre></div></div>
+</span>
+
+        
+
+        
+
+        
+        <div class="tags">
+          <small>
+          <i class="fa fa-tags"></i>
+            configuration, hp, debian
+          </small>
+        </div>
+        
+
+      </div>
+
+      
+
+      
+
+      
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+      </div>
+    </div>
+
+    <div class="footer clearfix">
+  <div class="col-md-6">
+    
+  </div>
+  <div class="col-md-6">
+    
+  </div>
+</div>
+
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script src="/js/jquery.mmenu.min.all.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.7/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/javascript">
+   $(document).ready(function() {
+      $("#my-menu").mmenu().on( "closed.mm", function() {
+            $(".menu-button").show();
+         });
+      $(".menu-button").click(function() {
+        $(".menu-button").hide();
+        $("#my-menu").trigger("open.mm");
+      });
+   });
+</script>
+
+
+
+
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', '']);
+          _gaq.push(['_trackPageview']);
+  (function () {
+      var ga = document.createElement('script');
+      ga.type = 'text/javascript';
+      ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+
+
+    </body>
+</html>

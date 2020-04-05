@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuring LXC and OpenvSwitch on Debian between 2 servers</title>
+<meta name="description" content="Geeking, testings and musings">
+
+<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" media="all" href="/css/style.css" />
+<link rel="stylesheet" type="text/css" media="all" href="/css/jquery.mmenu.all.css" />
+<link rel="stylesheet" href="/css/highlightjs.piperita.css">
+
+<!-- Favicons generated at http://realfavicongenerator.net/ -->
+<link rel="apple-touch-icon" sizes="57x57" href="/favicons/apple-touch-icon-57x57.png">
+<link rel="apple-touch-icon" sizes="60x60" href="/favicons/apple-touch-icon-60x60.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/favicons/apple-touch-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="/favicons/apple-touch-icon-76x76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/favicons/apple-touch-icon-114x114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="/favicons/apple-touch-icon-120x120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/favicons/apple-touch-icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/favicons/apple-touch-icon-152x152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon-180x180.png">
+<link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="/favicons/android-chrome-192x192.png" sizes="192x192">
+<link rel="icon" type="image/png" href="/favicons/favicon-96x96.png" sizes="96x96">
+<link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+<link rel="manifest" href="/favicons/manifest.json">
+<link rel="shortcut icon" href="/favicons/favicon.ico">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="msapplication-TileImage" content="/favicons/mstile-144x144.png">
+<meta name="msapplication-config" content="/favicons/browserconfig.xml">
+<meta name="theme-color" content="#ffffff">
+
+
+
+
+
+</head>
+
+
+    <body>
+
+    <nav id="my-menu">
+  <div>
+    <p>Geeking, testings and musings</p>
+
+    <ul class="pages">
+      <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="/posts/"><i class="fa fa-archive"></i> All Posts</a></li>
+      <li><a href="/search/"><i class="fa fa-search"></i> Search</a></li>
+    </ul>
+
+    <p class="links">
+  
+  <a href="https://www.linkedin.com/in/gfraysse/" target="_new"><i class="fa fa-linkedin"></i></a>
+  
+  
+  
+  <a href="https://github.com/gfraysse" target="_new"><i class="fa fa-github-alt"></i></a>
+  <a href="https://stackoverflow.com/users/10927519/gfraysse" target="_new"><i class="fa fa-stack-overflow"></i></a>
+  
+  
+  <a href="/feed.xml" target="_new"><i class="fa fa-rss"></i></a>
+</p>
+
+  </div>
+</nav>
+<div class="menu-button" href="#menu"><i class="fa fa-bars"></i></div>
+
+
+    <div class="page-content">
+      <div class="wrap">
+      
+
+<div class="container-fluid single">
+  <div class="row">
+
+    <div itemscope itemtype="http://schema.org/Article" class="col-md-12 article">
+      
+      <div class="thumb">
+        <i class="fa fa-cogs fa-4x"></i>
+      </div>
+      
+
+      <h1 class="header" itemprop="name">Configuring LXC and OpenvSwitch on Debian between 2 servers</h1>
+
+      <div class="author">
+        <small><i>
+          
+          on <span itemprop="datePublished" content="2014-08-28">April 5, 2020</span>
+           under configuration
+        </i></small>
+      </div>
+
+      <div class="read-time">
+        <small>
+          6 minute read
+        </small>
+      </div>
+
+      <div class="content-panel content">
+
+        
+
+        <span itemprop="articleBody"><p>This article describes a full end-to-end lab configuration for running LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch and use LACP on two ethernet links to enable failover on the VLAN.</p>
+
+<p>The basic setup is two servers :</p>
+
+<ul>
+  <li>a <a href="/configuration/2020/04/05/hp-proliant/">HP G7</a></li>
+  <li>a <a href="/configuration/2020/04/05/dell-r610/">Dell R610</a></li>
+</ul>
+
+<p>At time of writing, both run Debian 11 Bullseye with Linux kernel 5.4.0-4-amd64.</p>
+
+<p>Network configuration relies on a Netgear GS724TP switch</p>
+
+<p>Each server has a first connection to the switch on one interface for the management network, i.e. connected via a gateway to the rest of the network.</p>
+
+<p>A lab network is also set-up for the containers or VM on the two servers. For this, two interfaces on each server are set-up as a bond interface, those two interfaces are connected to the switch on a dedicated VLAN (42). For the bonding to work, a Link Aggregation Group (LAG) is configured on the switch for each server.</p>
+
+<p><img src="/assets/images/servers.png" alt="Lab LAN" title="Lab LAN" /></p>
+
+<h2 id="bonding">Bonding</h2>
+<p>Enabling bonding on Linux is very simple</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt-get <span class="nb">install </span>ifenslave
+<span class="nb">sudo </span>ifup bond0	
+</code></pre></div></div>
+
+<p>Then the content of the /etc/network/interfaces.d/setup file for the Dell R610:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>auto lo
+iface lo inet loopback
+
+auto eno1
+iface eno1 inet dhcp
+
+auto bond0
+
+iface bond0 inet manual
+	slaves eno3 eno4
+	bond-mode active-backup
+	bond-miimon 100
+	bond-downdelay 200
+	bond-updelay 200
+
+allow-bond0 eno3
+iface eno3 inet manual
+	bond-master bond0
+
+allow-bond0 eno4
+iface eno4 inet manual
+	bond-master bond0
+</code></pre></div></div>
+
+<p>Then the content of the /etc/network/interfaces.d/setup file for the HP G7, identical except for the naming ot the interfaces:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>auto lo
+iface lo inet loopback
+
+auto enp3s0f0
+iface enp3s0f0 inet dhcp
+
+auto bond0
+
+iface bond0 inet manual
+	slaves enp4s0f0 enp4s0f1
+	bond-mode active-backup
+	bond-miimon 100
+	bond-downdelay 200
+	bond-updelay 200
+
+allow-bond0 enp4s0f0
+iface enp4s0f0 inet manual
+	bond-master bond0
+
+allow-bond0 enp4s0f1
+iface enp4s0f1 inet manual
+	bond-master bond0
+</code></pre></div></div>
+
+<p>At this stage the two servers can communicate with each other, and the rest of the network on their primary interface on the “public” LAN. 
+To enable the “Lab” LAN we need to configure the bonded interfaces. This is done below with Open vSwitch.</p>
+
+<h2 id="openvswitch">OpenvSwitch</h2>
+
+<p><a href="http://openvswitch.org/">Open vSwitch</a> is installed from the source <a href="https://www.openvswitch.org/releases/openvswitch-2.12.0.tar.gz">release 2.12.0</a> was the latest at the time of writing. Compilation and installation are straightforward:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>./boot.sh
+<span class="nv">$ </span>./configure
+<span class="nv">$ </span>make <span class="nt">-j24</span>
+<span class="nv">$ </span>make <span class="nb">install</span>
+</code></pre></div></div>
+
+<p>Then start Open vSwitch</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">mkdir</span> <span class="nt">-p</span> /usr/local/etc/openvswitch
+<span class="nv">$ </span>ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
+<span class="nv">$ </span><span class="nb">mkdir</span> <span class="nt">-p</span> /usr/local/var/run/openvswitch
+<span class="nv">$ </span>/usr/local/sbin/ovsdb-server /usr/local/etc/openvswitch/conf.db <span class="nt">--log-file</span><span class="o">=</span>/tmp/ovsdb-server.log <span class="nt">--remote</span><span class="o">=</span>punix:/usr/local/var/run/openvswitch/db.sock <span class="nt">--remote</span><span class="o">=</span>db:Open_vSwitch,Open_vSwitch,manager_options <span class="nt">--private-key</span><span class="o">=</span>db:Open_vSwitch,SSL,private_key <span class="nt">--certificate</span><span class="o">=</span>db:Open_vSwitch,SSL,certificate <span class="nt">--bootstrap-ca-cert</span><span class="o">=</span>db:Open_vSwitch,SSL,ca_cert <span class="nt">--pidfile</span> <span class="nt">--detach</span> 	
+<span class="nv">$ </span>/usr/local/sbin/ovs-vswitchd <span class="nt">--pidfile</span> <span class="nt">--detach</span>
+</code></pre></div></div>
+
+<p>The commands above tell Open vSwitch to use the file /usr/local/etc/openvswitch/conf.db as the database and to listen on a unix socket /usr/local/var/run/openvswitch/db.sock and then astart the Open vSwitch daemon.</p>
+
+<p>We then create a bridge br42 and connect the bonded interface to it:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>/usr/local/bin/ovs-vsctl add-br br42
+<span class="nv">$ </span>/usr/local/bin/ovs-vsctl add-port br42 bond0
+</code></pre></div></div>
+
+<p>and finally we start the bridge, this will give an IP adress to the bridge:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ifup br42
+</code></pre></div></div>
+
+<p>Now the configuration looks like that:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># ip a</span>
+<span class="o">(</span>...<span class="o">)</span>
+4: eno3: &lt;BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP&gt; mtu 1500 qdisc mq master bond0 state UP group default qlen 1000
+	<span class="nb">link</span>/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+5: eno4: &lt;BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP&gt; mtu 1500 qdisc mq master bond0 state UP group default qlen 1000
+	<span class="nb">link</span>/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+6: bond0: &lt;BROADCAST,MULTICAST,MASTER,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue master ovs-system state UP group default qlen 1000
+	<span class="nb">link</span>/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+	inet6 fe80::6c98:69ff:fea8:706b/64 scope <span class="nb">link 
+	   </span>valid_lft forever preferred_lft forever
+<span class="o">(</span>...<span class="o">)</span>
+9: ovs-system: &lt;BROADCAST,MULTICAST&gt; mtu 1500 qdisc noop state DOWN group default qlen 1000
+	<span class="nb">link</span>/ether 0e:c0:fe:c4:87:a2 brd ff:ff:ff:ff:ff:ff
+10: br42: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
+	<span class="nb">link</span>/ether 1a:b2:71:d0:53:42 brd ff:ff:ff:ff:ff:ff
+	inet 10.0.42.1/24 brd 10.0.42.255 scope global br42
+       valid_lft forever preferred_lft forever
+    inet6 fe80::18b2:71ff:fed0:5342/64 scope <span class="nb">link 
+       </span>valid_lft forever preferred_lft forever
+</code></pre></div></div>
+
+<p>in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (eno3 and eno4 here) that constitute the bond.</p>
+
+<h2 id="lxc">LXC</h2>
+
+<p>For unprivileged containers</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>sh <span class="nt">-c</span> <span class="s1">'echo "kernel.unprivileged_userns_clone=1" &gt; /etc/sysctl.d/80-lxc-userns.conf'</span>
+</code></pre></div></div>
+
+<p>Create an account for the unprivileged user</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/default.conf 
+	lxc.net.0.type <span class="o">=</span> veth
+	lxc.net.0.flags <span class="o">=</span> up
+	lxc.net.0.hwaddr <span class="o">=</span> 00:16:3e:01:01:01
+	lxc.apparmor.profile <span class="o">=</span> generated
+	lxc.apparmor.allow_nesting <span class="o">=</span> 1
+	lxc.net.0.script.up <span class="o">=</span> /etc/lxc/ovsup
+	lxc.net.0.script.down <span class="o">=</span> /etc/lxc/ovsdown
+
+<span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/ovsup 
+	<span class="c">#!/bin/bash</span>
+	<span class="nv">BRIDGE</span><span class="o">=</span><span class="s2">"br42"</span>
+	ovs-vsctl <span class="nt">--may-exist</span> add-br <span class="nv">$BRIDGE</span>
+	ifconfig <span class="nv">$5</span> 0.0.0.0 up
+	ovs-vsctl <span class="nt">--if-exists</span> del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+	ovs-vsctl <span class="nt">--may-exist</span> add-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+
+<span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/ovsdown
+	<span class="c">#!/bin/bash</span>
+
+	<span class="nv">BRIDGE</span><span class="o">=</span><span class="s2">"br42"</span>
+	ifdown <span class="nv">$5</span>
+	ovs-vsctl del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+</code></pre></div></div>
+
+<p>File <em>~lxcunpriv/.config/lxc/default.conf</em></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> ~lxcunpriv/.config/lxc/default.conf 
+    lxc.network.type <span class="o">=</span> veth
+    lxc.network.link <span class="o">=</span> br0
+    lxc.network.flags <span class="o">=</span> up
+    lxc.network.hwaddr <span class="o">=</span> 00:16:3e:xx:xx:xx
+    lxc.id_map <span class="o">=</span> u 0 165536 65536
+    lxc.id_map <span class="o">=</span> g 0 165536 65536
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>useradd <span class="nt">-s</span> /sbin/bash <span class="nt">-c</span> <span class="s1">'unprivileged lxc user'</span> <span class="nt">-m</span> lxcunpriv
+
+<span class="nv">$ </span><span class="nb">sudo </span>sh <span class="nt">-c</span> <span class="s1">'echo "kernel.unprivileged_userns_clone=1" &gt; /etc/sysctl.d/80-lxc-userns.conf'</span>
+<span class="nv">$ </span><span class="nb">sudo </span>sysctl <span class="nt">--system</span>
+
+<span class="nv">$ </span><span class="nb">cat</span> /etc/subuid
+	lxcunpriv:165536:65536
+	<span class="nv">$ </span><span class="nb">cat</span> /etc/subgid
+	lxcunpriv:165536:65536
+
+<span class="nv">$ </span>setfacl <span class="nt">-m</span> u:165536:x /home/lxcunpriv/ /home/lxcunpriv/.local /home/lxcunpriv/.local/share
+	
+<span class="nv">$ </span>su lxcunpriv
+<span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/lxc-usernet 
+	lxcunpriv veth br42 10
+</code></pre></div></div>
+
+<p><strong>todo</strong></p>
+
+<!-- setuid script for OvS -->
+<!-- chmod ug+s /etc/lxc/ovsup  -->
+<!-- chmod ug+s /etc/lxc/ovsdown -->
+
+<!-- File *prep.sh* -->
+
+<!-- ```bash  -->
+<!-- 	#!/bin/bash  -->
+<!--     for d in /sys/fs/cgroup/*; do -->
+<!--          f=$(basename $d) -->
+<!--          echo "looking at $f" -->
+<!--          if [ "$f" = "cpuset" ]; then -->
+<!--                  echo 1 | sudo tee -a $d/cgroup.clone_children; -->
+<!--          elif [ "$f" = "memory" ]; then -->
+<!--                  echo 1 | sudo tee -a $d/memory.use_hierarchy; -->
+<!--          fi -->
+<!--          sudo mkdir -p $d/$USER -->
+<!--          sudo chown -R $USER $d/$USER -->
+<!--          echo $$ > $d/$USER/tasks -->
+<!--     done -->
+<!-- ``` -->
+
+<!-- Command to enter to be able to start first VM : -->
+
+<!-- ```bash  -->
+<!-- 	$ sudo mount /mnt/lxc/debian_dev/ -->
+<!-- 	$ chown 165536:165536 /mnt/lxc/debian_test/ -->
+<!--     $ setfacl -m u:165536:x  /mnt/lxc/debian_test/ -->
+<!--     $ sh prep.sh -->
+<!-- 	$ for d in /sys/fs/cgroup/*; do echo $$ > $d/$USER/tasks; done -->
+<!--     $ sudo systemctl start cgmanager -->
+<!--     $ systemctl status cgmanager -->
+<!--     $ lxc-start -n debian_dev -->
+<!-- ``` -->
+
+<p>Some useful links on configurating unprivileged containers with LXC</p>
+<ul>
+  <li><a href="https://stgraber.org/2013/12/20/lxc-1-0-blog-post-series/">https://stgraber.org/2013/12/20/lxc-1-0-blog-post-series/</a></li>
+  <li><a href="https://linuxcontainers.org/lxc/manpages/">https://linuxcontainers.org/lxc/manpages/</a></li>
+  <li><a href="https://linuxcontainers.org/lxc/getting-started/">https://linuxcontainers.org/lxc/getting-started/</a></li>
+  <li><a href="https://wiki.debian.org/LXC">https://wiki.debian.org/LXC</a></li>
+  <li><a href="https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/">https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/</a></li>
+</ul>
+
+<!-- Networking -->
+<!-- ---------- -->
+<!-- DNS ? -->
+<!-- DHCP ? -->
+<!-- subnet ? -->
+<!-- https://angristan.xyz/setup-network-bridge-lxc-net/ -->
+<!-- https://wiki.debian.org/LXC/SimpleBridge -->
+
+<!-- https://blog.scottlowe.org/2014/01/23/automatically-connecting-lxc-to-open-vswitch/ -->
+<!-- https://infologs.wordpress.com/2015/06/19/how-to-attach-lxc-container-to-ovs-openvswitch/ -->
+<!-- https://www.thegeekdiary.com/how-to-set-external-network-for-containers-in-linux-containers-lxc/ -->
+<!-- http://www.linux-admins.net/2013/04/connecting-kvm-or-lxc-to-open-vswitch.html -->
+
+<!-- https://ilearnedhowto.wordpress.com/2016/09/16/how-to-create-a-overlay-network-using-open-vswitch-in-order-to-connect-lxc-containers/ -->
+<!-- https://ilearnedhowto.wordpress.com/2016/09/21/how-to-connect-complex-networking-infrastructures-with-open-vswitch-and-lxc-containers/ -->
+</span>
+
+        
+
+        
+
+        
+        <div class="tags">
+          <small>
+          <i class="fa fa-tags"></i>
+            configuration, lxc, openvswitch
+          </small>
+        </div>
+        
+
+      </div>
+
+      
+
+      
+
+      
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+      </div>
+    </div>
+
+    <div class="footer clearfix">
+  <div class="col-md-6">
+    
+  </div>
+  <div class="col-md-6">
+    
+  </div>
+</div>
+
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script src="/js/jquery.mmenu.min.all.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.7/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/javascript">
+   $(document).ready(function() {
+      $("#my-menu").mmenu().on( "closed.mm", function() {
+            $(".menu-button").show();
+         });
+      $(".menu-button").click(function() {
+        $(".menu-button").hide();
+        $("#my-menu").trigger("open.mm");
+      });
+   });
+</script>
+
+
+
+
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', '']);
+          _gaq.push(['_trackPageview']);
+  (function () {
+      var ga = document.createElement('script');
+      ga.type = 'text/javascript';
+      ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+
+
+    </body>
+</html>

@@ -1,0 +1,27 @@
+[
+  
+  {
+    "title"    : "Configuring LXC and OpenvSwitch on Debian between 2 servers",
+    "category" : "",
+    "tags"     : "configuration, lxc, openvswitch",
+    "url"      : "/configuration/2020/04/05/lxc-openvswitch/",
+    "date"     : "2020-04-05 14:00:00 +0200"
+    } ,
+    
+  {
+    "title"    : "Configuring Debian on a HP Proliant G7",
+    "category" : "",
+    "tags"     : "configuration, hp, debian",
+    "url"      : "/configuration/2020/04/05/hp-proliant/",
+    "date"     : "2020-04-05 14:00:00 +0200"
+    } ,
+    
+  {
+    "title"    : "Configuring Debian Bullseye on a Dell PowerEdge R610",
+    "category" : "",
+    "tags"     : "configuration, dell, debian",
+    "url"      : "/configuration/2020/04/05/dell-r610/",
+    "date"     : "2020-04-05 14:00:00 +0200"
+    } 
+    
+  ]

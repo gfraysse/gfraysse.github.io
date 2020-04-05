@@ -1,0 +1,1177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Geeking, testings and musings</title>
+    <description>Geeking, testings and musings</description>
+    <link>https://gfraysse.github.io//</link>
+    <atom:link href="https://gfraysse.github.io//feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Sun, 05 Apr 2020 21:17:21 +0200</pubDate>
+    <lastBuildDate>Sun, 05 Apr 2020 21:17:21 +0200</lastBuildDate>
+    <generator>Jekyll v4.0.0</generator>
+    
+      <item>
+        <title>Configuring LXC and OpenvSwitch on Debian between 2 servers</title>
+        <description>&lt;p&gt;This article describes a full end-to-end lab configuration for running LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch and use LACP on two ethernet links to enable failover on the VLAN.&lt;/p&gt;
+
+&lt;p&gt;The basic setup is two servers :&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;a &lt;a href=&quot;/configuration/2020/04/05/hp-proliant/&quot;&gt;HP G7&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;a &lt;a href=&quot;/configuration/2020/04/05/dell-r610/&quot;&gt;Dell R610&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;At time of writing, both run Debian 11 Bullseye with Linux kernel 5.4.0-4-amd64.&lt;/p&gt;
+
+&lt;p&gt;Network configuration relies on a Netgear GS724TP switch&lt;/p&gt;
+
+&lt;p&gt;Each server has a first connection to the switch on one interface for the management network, i.e. connected via a gateway to the rest of the network.&lt;/p&gt;
+
+&lt;p&gt;A lab network is also set-up for the containers or VM on the two servers. For this, two interfaces on each server are set-up as a bond interface, those two interfaces are connected to the switch on a dedicated VLAN (42). For the bonding to work, a Link Aggregation Group (LAG) is configured on the switch for each server.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/images/servers.png&quot; alt=&quot;Lab LAN&quot; title=&quot;Lab LAN&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;bonding&quot;&gt;Bonding&lt;/h2&gt;
+&lt;p&gt;Enabling bonding on Linux is very simple&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;apt-get &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;ifenslave
+&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;ifup bond0	
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Then the content of the /etc/network/interfaces.d/setup file for the Dell R610:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;auto lo
+iface lo inet loopback
+
+auto eno1
+iface eno1 inet dhcp
+
+auto bond0
+
+iface bond0 inet manual
+	slaves eno3 eno4
+	bond-mode active-backup
+	bond-miimon 100
+	bond-downdelay 200
+	bond-updelay 200
+
+allow-bond0 eno3
+iface eno3 inet manual
+	bond-master bond0
+
+allow-bond0 eno4
+iface eno4 inet manual
+	bond-master bond0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Then the content of the /etc/network/interfaces.d/setup file for the HP G7, identical except for the naming ot the interfaces:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;auto lo
+iface lo inet loopback
+
+auto enp3s0f0
+iface enp3s0f0 inet dhcp
+
+auto bond0
+
+iface bond0 inet manual
+	slaves enp4s0f0 enp4s0f1
+	bond-mode active-backup
+	bond-miimon 100
+	bond-downdelay 200
+	bond-updelay 200
+
+allow-bond0 enp4s0f0
+iface enp4s0f0 inet manual
+	bond-master bond0
+
+allow-bond0 enp4s0f1
+iface enp4s0f1 inet manual
+	bond-master bond0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;At this stage the two servers can communicate with each other, and the rest of the network on their primary interface on the “public” LAN. 
+To enable the “Lab” LAN we need to configure the bonded interfaces. This is done below with Open vSwitch.&lt;/p&gt;
+
+&lt;h2 id=&quot;openvswitch&quot;&gt;OpenvSwitch&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://openvswitch.org/&quot;&gt;Open vSwitch&lt;/a&gt; is installed from the source &lt;a href=&quot;https://www.openvswitch.org/releases/openvswitch-2.12.0.tar.gz&quot;&gt;release 2.12.0&lt;/a&gt; was the latest at the time of writing. Compilation and installation are straightforward:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;./boot.sh
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;./configure
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;make &lt;span class=&quot;nt&quot;&gt;-j24&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;make &lt;span class=&quot;nb&quot;&gt;install&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Then start Open vSwitch&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;mkdir&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; /usr/local/etc/openvswitch
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;mkdir&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; /usr/local/var/run/openvswitch
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;/usr/local/sbin/ovsdb-server /usr/local/etc/openvswitch/conf.db &lt;span class=&quot;nt&quot;&gt;--log-file&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/tmp/ovsdb-server.log &lt;span class=&quot;nt&quot;&gt;--remote&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;punix:/usr/local/var/run/openvswitch/db.sock &lt;span class=&quot;nt&quot;&gt;--remote&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;db:Open_vSwitch,Open_vSwitch,manager_options &lt;span class=&quot;nt&quot;&gt;--private-key&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;db:Open_vSwitch,SSL,private_key &lt;span class=&quot;nt&quot;&gt;--certificate&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;db:Open_vSwitch,SSL,certificate &lt;span class=&quot;nt&quot;&gt;--bootstrap-ca-cert&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;db:Open_vSwitch,SSL,ca_cert &lt;span class=&quot;nt&quot;&gt;--pidfile&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;--detach&lt;/span&gt; 	
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;/usr/local/sbin/ovs-vswitchd &lt;span class=&quot;nt&quot;&gt;--pidfile&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;--detach&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The commands above tell Open vSwitch to use the file /usr/local/etc/openvswitch/conf.db as the database and to listen on a unix socket /usr/local/var/run/openvswitch/db.sock and then astart the Open vSwitch daemon.&lt;/p&gt;
+
+&lt;p&gt;We then create a bridge br42 and connect the bonded interface to it:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;/usr/local/bin/ovs-vsctl add-br br42
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;/usr/local/bin/ovs-vsctl add-port br42 bond0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;and finally we start the bridge, this will give an IP adress to the bridge:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ifup br42
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Now the configuration looks like that:&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c&quot;&gt;# ip a&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;...&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+4: eno3: &amp;lt;BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP&amp;gt; mtu 1500 qdisc mq master bond0 state UP group default qlen 1000
+	&lt;span class=&quot;nb&quot;&gt;link&lt;/span&gt;/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+5: eno4: &amp;lt;BROADCAST,MULTICAST,SLAVE,UP,LOWER_UP&amp;gt; mtu 1500 qdisc mq master bond0 state UP group default qlen 1000
+	&lt;span class=&quot;nb&quot;&gt;link&lt;/span&gt;/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+6: bond0: &amp;lt;BROADCAST,MULTICAST,MASTER,UP,LOWER_UP&amp;gt; mtu 1500 qdisc noqueue master ovs-system state UP group default qlen 1000
+	&lt;span class=&quot;nb&quot;&gt;link&lt;/span&gt;/ether 6e:98:69:a8:70:6b brd ff:ff:ff:ff:ff:ff
+	inet6 fe80::6c98:69ff:fea8:706b/64 scope &lt;span class=&quot;nb&quot;&gt;link 
+	   &lt;/span&gt;valid_lft forever preferred_lft forever
+&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;...&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+9: ovs-system: &amp;lt;BROADCAST,MULTICAST&amp;gt; mtu 1500 qdisc noop state DOWN group default qlen 1000
+	&lt;span class=&quot;nb&quot;&gt;link&lt;/span&gt;/ether 0e:c0:fe:c4:87:a2 brd ff:ff:ff:ff:ff:ff
+10: br42: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
+	&lt;span class=&quot;nb&quot;&gt;link&lt;/span&gt;/ether 1a:b2:71:d0:53:42 brd ff:ff:ff:ff:ff:ff
+	inet 10.0.42.1/24 brd 10.0.42.255 scope global br42
+       valid_lft forever preferred_lft forever
+    inet6 fe80::18b2:71ff:fed0:5342/64 scope &lt;span class=&quot;nb&quot;&gt;link 
+       &lt;/span&gt;valid_lft forever preferred_lft forever
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (eno3 and eno4 here) that constitute the bond.&lt;/p&gt;
+
+&lt;h2 id=&quot;lxc&quot;&gt;LXC&lt;/h2&gt;
+
+&lt;p&gt;For unprivileged containers&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;sh &lt;span class=&quot;nt&quot;&gt;-c&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;'echo &quot;kernel.unprivileged_userns_clone=1&quot; &amp;gt; /etc/sysctl.d/80-lxc-userns.conf'&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Create an account for the unprivileged user&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/lxc/default.conf 
+	lxc.net.0.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; veth
+	lxc.net.0.flags &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; up
+	lxc.net.0.hwaddr &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 00:16:3e:01:01:01
+	lxc.apparmor.profile &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; generated
+	lxc.apparmor.allow_nesting &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 1
+	lxc.net.0.script.up &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; /etc/lxc/ovsup
+	lxc.net.0.script.down &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; /etc/lxc/ovsdown
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/lxc/ovsup 
+	&lt;span class=&quot;c&quot;&gt;#!/bin/bash&lt;/span&gt;
+	&lt;span class=&quot;nv&quot;&gt;BRIDGE&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;br42&quot;&lt;/span&gt;
+	ovs-vsctl &lt;span class=&quot;nt&quot;&gt;--may-exist&lt;/span&gt; add-br &lt;span class=&quot;nv&quot;&gt;$BRIDGE&lt;/span&gt;
+	ifconfig &lt;span class=&quot;nv&quot;&gt;$5&lt;/span&gt; 0.0.0.0 up
+	ovs-vsctl &lt;span class=&quot;nt&quot;&gt;--if-exists&lt;/span&gt; del-port &lt;span class=&quot;nv&quot;&gt;$BRIDGE&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$5&lt;/span&gt;
+	ovs-vsctl &lt;span class=&quot;nt&quot;&gt;--may-exist&lt;/span&gt; add-port &lt;span class=&quot;nv&quot;&gt;$BRIDGE&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$5&lt;/span&gt;
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/lxc/ovsdown
+	&lt;span class=&quot;c&quot;&gt;#!/bin/bash&lt;/span&gt;
+
+	&lt;span class=&quot;nv&quot;&gt;BRIDGE&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;br42&quot;&lt;/span&gt;
+	ifdown &lt;span class=&quot;nv&quot;&gt;$5&lt;/span&gt;
+	ovs-vsctl del-port &lt;span class=&quot;nv&quot;&gt;$BRIDGE&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$5&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;File &lt;em&gt;~lxcunpriv/.config/lxc/default.conf&lt;/em&gt;&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; ~lxcunpriv/.config/lxc/default.conf 
+    lxc.network.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; veth
+    lxc.network.link &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; br0
+    lxc.network.flags &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; up
+    lxc.network.hwaddr &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 00:16:3e:xx:xx:xx
+    lxc.id_map &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; u 0 165536 65536
+    lxc.id_map &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; g 0 165536 65536
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;useradd &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; /sbin/bash &lt;span class=&quot;nt&quot;&gt;-c&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;'unprivileged lxc user'&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; lxcunpriv
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;sh &lt;span class=&quot;nt&quot;&gt;-c&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;'echo &quot;kernel.unprivileged_userns_clone=1&quot; &amp;gt; /etc/sysctl.d/80-lxc-userns.conf'&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;sysctl &lt;span class=&quot;nt&quot;&gt;--system&lt;/span&gt;
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/subuid
+	lxcunpriv:165536:65536
+	&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/subgid
+	lxcunpriv:165536:65536
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;setfacl &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; u:165536:x /home/lxcunpriv/ /home/lxcunpriv/.local /home/lxcunpriv/.local/share
+	
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;su lxcunpriv
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/lxc/lxc-usernet 
+	lxcunpriv veth br42 10
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;strong&gt;todo&lt;/strong&gt;&lt;/p&gt;
+
+&lt;!-- setuid script for OvS --&gt;
+&lt;!-- chmod ug+s /etc/lxc/ovsup  --&gt;
+&lt;!-- chmod ug+s /etc/lxc/ovsdown --&gt;
+
+&lt;!-- File *prep.sh* --&gt;
+
+&lt;!-- ```bash  --&gt;
+&lt;!-- 	#!/bin/bash  --&gt;
+&lt;!--     for d in /sys/fs/cgroup/*; do --&gt;
+&lt;!--          f=$(basename $d) --&gt;
+&lt;!--          echo &quot;looking at $f&quot; --&gt;
+&lt;!--          if [ &quot;$f&quot; = &quot;cpuset&quot; ]; then --&gt;
+&lt;!--                  echo 1 | sudo tee -a $d/cgroup.clone_children; --&gt;
+&lt;!--          elif [ &quot;$f&quot; = &quot;memory&quot; ]; then --&gt;
+&lt;!--                  echo 1 | sudo tee -a $d/memory.use_hierarchy; --&gt;
+&lt;!--          fi --&gt;
+&lt;!--          sudo mkdir -p $d/$USER --&gt;
+&lt;!--          sudo chown -R $USER $d/$USER --&gt;
+&lt;!--          echo $$ &gt; $d/$USER/tasks --&gt;
+&lt;!--     done --&gt;
+&lt;!-- ``` --&gt;
+
+&lt;!-- Command to enter to be able to start first VM : --&gt;
+
+&lt;!-- ```bash  --&gt;
+&lt;!-- 	$ sudo mount /mnt/lxc/debian_dev/ --&gt;
+&lt;!-- 	$ chown 165536:165536 /mnt/lxc/debian_test/ --&gt;
+&lt;!--     $ setfacl -m u:165536:x  /mnt/lxc/debian_test/ --&gt;
+&lt;!--     $ sh prep.sh --&gt;
+&lt;!-- 	$ for d in /sys/fs/cgroup/*; do echo $$ &gt; $d/$USER/tasks; done --&gt;
+&lt;!--     $ sudo systemctl start cgmanager --&gt;
+&lt;!--     $ systemctl status cgmanager --&gt;
+&lt;!--     $ lxc-start -n debian_dev --&gt;
+&lt;!-- ``` --&gt;
+
+&lt;p&gt;Some useful links on configurating unprivileged containers with LXC&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://stgraber.org/2013/12/20/lxc-1-0-blog-post-series/&quot;&gt;https://stgraber.org/2013/12/20/lxc-1-0-blog-post-series/&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://linuxcontainers.org/lxc/manpages/&quot;&gt;https://linuxcontainers.org/lxc/manpages/&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://linuxcontainers.org/lxc/getting-started/&quot;&gt;https://linuxcontainers.org/lxc/getting-started/&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://wiki.debian.org/LXC&quot;&gt;https://wiki.debian.org/LXC&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/&quot;&gt;https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;!-- Networking --&gt;
+&lt;!-- ---------- --&gt;
+&lt;!-- DNS ? --&gt;
+&lt;!-- DHCP ? --&gt;
+&lt;!-- subnet ? --&gt;
+&lt;!-- https://angristan.xyz/setup-network-bridge-lxc-net/ --&gt;
+&lt;!-- https://wiki.debian.org/LXC/SimpleBridge --&gt;
+
+&lt;!-- https://blog.scottlowe.org/2014/01/23/automatically-connecting-lxc-to-open-vswitch/ --&gt;
+&lt;!-- https://infologs.wordpress.com/2015/06/19/how-to-attach-lxc-container-to-ovs-openvswitch/ --&gt;
+&lt;!-- https://www.thegeekdiary.com/how-to-set-external-network-for-containers-in-linux-containers-lxc/ --&gt;
+&lt;!-- http://www.linux-admins.net/2013/04/connecting-kvm-or-lxc-to-open-vswitch.html --&gt;
+
+&lt;!-- https://ilearnedhowto.wordpress.com/2016/09/16/how-to-create-a-overlay-network-using-open-vswitch-in-order-to-connect-lxc-containers/ --&gt;
+&lt;!-- https://ilearnedhowto.wordpress.com/2016/09/21/how-to-connect-complex-networking-infrastructures-with-open-vswitch-and-lxc-containers/ --&gt;
+</description>
+        <pubDate>Sun, 05 Apr 2020 14:00:00 +0200</pubDate>
+        <link>https://gfraysse.github.io//configuration/2020/04/05/lxc-openvswitch/</link>
+        <guid isPermaLink="true">https://gfraysse.github.io//configuration/2020/04/05/lxc-openvswitch/</guid>
+        
+        <category>configuration</category>
+        
+        <category>lxc</category>
+        
+        <category>openvswitch</category>
+        
+        
+        <category>configuration</category>
+        
+      </item>
+    
+      <item>
+        <title>Configuring Debian on a HP Proliant G7</title>
+        <description>&lt;h2 id=&quot;hp-proliant-g7&quot;&gt;HP Proliant G7&lt;/h2&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /proc/cpuinfo
+	processor       : 23
+	vendor_id       : GenuineIntel
+	cpu family      : 6
+	model           : 44
+	model name      : Intel&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;R&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; Xeon&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;R&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; CPU           E5649  @ 2.53GHz
+	stepping        : 2
+	microcode       : 0x14
+	cpu MHz         : 1599.918
+	cache size      : 12288 KB
+	physical &lt;span class=&quot;nb&quot;&gt;id&lt;/span&gt;     : 1
+	siblings        : 12
+	core &lt;span class=&quot;nb&quot;&gt;id&lt;/span&gt;         : 9
+	cpu cores       : 6
+	apicid          : 51
+	initial apicid  : 51
+	fpu             : &lt;span class=&quot;nb&quot;&gt;yes
+	&lt;/span&gt;fpu_exception   : &lt;span class=&quot;nb&quot;&gt;yes
+	&lt;/span&gt;cpuid level     : 11
+	wp              : &lt;span class=&quot;nb&quot;&gt;yes
+	&lt;/span&gt;flags           : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb r
+	dtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 cx1
+	6 xtpr pdcm pcid dca sse4_1 sse4_2 popcnt aes lahf_lm epb pti tpr_shadow vnmi flexpriority ept vpid dtherm ida arat
+	bugs            : cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs
+	bogomips        : 5064.77
+	clflush size    : 64
+	cache_alignment : 64
+	address sizes   : 40 bits physical, 48 bits virtual
+	power management:
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;free
+	total        used        free      shared  buff/cache   available
+	Mem:       16476980      288552    15807548        9560      380880    15858556
+	Swap:      16764924           0    16764924
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;debian packages at : http://downloads.linux.hpe.com/SDR/repo/mcp/Debian/pool/non-free/&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;hpssacli-2.40-13.0_amd64.deb&lt;/li&gt;
+  &lt;li&gt;ssacli-3.40-3.0_amd64.deb&lt;/li&gt;
+  &lt;li&gt;dpkg -i hpssacli-2.40-13.0_amd64.deb&lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;dpkg -i ssacli-3.40-3.0_amd64.deb&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;https://pikedom.com/linux-server-monitoring-tools-for-hp-proliant/&lt;/li&gt;
+  &lt;li&gt;https://dwaves.org/2019/09/08/linux-bash-hp-proliant-p410i-hardware-monitoring-monitor-and-mail-script/&lt;/li&gt;
+  &lt;li&gt;https://www.unrelatedshit.com/2011/05/30/proliant-management-tools-for-ubuntu-debian/&lt;/li&gt;
+  &lt;li&gt;https://dwaves.org/2019/09/05/linux-bash-how-to-find-hardware-raid-controller-get-info-about-hardware-hp-server-get-raid-and-power-watt-usage-status-from-command-line/&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;	&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ssacli ctrl all show config
+
+Smart Array P410i &lt;span class=&quot;k&quot;&gt;in &lt;/span&gt;Slot 0 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Embedded&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;sn: 50014380147532C0&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+
+
+   Internal Drive Cage at Port 1I, Box 1, OK
+
+
+
+   Internal Drive Cage at Port 2I, Box 1, OK
+
+
+   Port Name: 1I
+
+   Port Name: 2I
+
+   Array A &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;SAS, Unused Space: 0  MB&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+      logicaldrive 1 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;558.76 GB, RAID 1, OK&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+      physicaldrive 1I:1:3 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;port 1I:box 1:bay 3, SAS HDD, 600 GB, OK&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+      physicaldrive 1I:1:4 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;port 1I:box 1:bay 4, SAS HDD, 600 GB, OK&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+   SEP &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Vendor ID PMCSIERA, Model  SRC 8x6G&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; 250  &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;WWID: 50014380147532CF&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;package hp-health_10.80-1874.10_amd64.deb
+prerequisite: apt-get install lib32gcc1&lt;/p&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;	&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;hplog &lt;span class=&quot;nt&quot;&gt;-t&lt;/span&gt;
+	ID     TYPE        LOCATION      STATUS    CURRENT  THRESHOLD 
+1  Basic Sensor Ambient         Normal    53F/ 12C 105F/ 41C 
+2  Basic Sensor Processor Zone  Normal   104F/ 40C 179F/ 82C 
+3  Basic Sensor Processor Zone  Normal   104F/ 40C 179F/ 82C 
+4  Basic Sensor Memory Board    Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+5  Basic Sensor Memory Board    Normal    75F/ 24C 188F/ 87C 
+6  Basic Sensor Memory Board    Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+7  Basic Sensor Memory Board    Normal    77F/ 25C 188F/ 87C 
+8  Basic Sensor System Board    Normal    91F/ 33C 194F/ 90C 
+9  Basic Sensor System Board    Normal    80F/ 27C 149F/ 65C 
+10  Basic Sensor System Board    Normal    96F/ 36C 194F/ 90C 
+11  Basic Sensor System Board    Normal    78F/ 26C 158F/ 70C 
+12  Basic Sensor System Board    Normal   104F/ 40C 194F/ 90C 
+13  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+14  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+15  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+16  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+17  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+18  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+19  Basic Sensor System Board    Normal    64F/ 18C 158F/ 70C 
+20  Basic Sensor System Board    Normal    71F/ 22C 158F/ 70C 
+21  Basic Sensor System Board    Normal    80F/ 27C 176F/ 80C 
+22  Basic Sensor System Board    Normal    78F/ 26C 176F/ 80C 
+23  Basic Sensor System Board    Normal    95F/ 35C 170F/ 77C 
+24  Basic Sensor System Board    Normal    84F/ 29C 158F/ 70C 
+25  Basic Sensor System Board    Normal    73F/ 23C 158F/ 70C 
+26  Basic Sensor System Board    Normal    73F/ 23C 158F/ 70C 
+27  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+28  Basic Sensor I/O Zone        Normal   &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C &lt;span class=&quot;nt&quot;&gt;---F&lt;/span&gt;/---C 
+29  Basic Sensor SCSI Backplane  Normal   122F/ 50C 140F/ 60C 
+30  Basic Sensor System Board    Normal   159F/ 71C 230F/110C 
+
+
+  &lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;lspci &lt;span class=&quot;nt&quot;&gt;-vvv&lt;/span&gt; | &lt;span class=&quot;nb&quot;&gt;grep&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; raid
+05:00.0 RAID bus controller: Hewlett-Packard Company Smart Array G6 controllers &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;rev 01&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+	&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;hpasmcli 
+HPE management CLI &lt;span class=&quot;k&quot;&gt;for &lt;/span&gt;Linux &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;v2.0&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+Copyright 2015 Hewlett Packard Enterprise Development LP.
+&lt;span class=&quot;nt&quot;&gt;--------------------------------------------------------------------------&lt;/span&gt;
+NOTE: Some hpasmcli commands may not be supported on all Proliant servers.
+      Type &lt;span class=&quot;s1&quot;&gt;'help'&lt;/span&gt; to get a list of all top level commands.
+&lt;span class=&quot;nt&quot;&gt;--------------------------------------------------------------------------&lt;/span&gt;
+hpasmcli&amp;gt; SHOW POWERSUPPLY
+Power supply &lt;span class=&quot;c&quot;&gt;#1&lt;/span&gt;
+        Present  : Yes
+        Redundant: No
+        Condition: FAILED
+        Hotplug  : Supported
+Power supply &lt;span class=&quot;c&quot;&gt;#2&lt;/span&gt;
+        Present  : Yes
+        Redundant: No
+        Condition: Ok
+        Hotplug  : Supported
+        Power    : 95 Watts
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;dmidecode &lt;span class=&quot;nt&quot;&gt;--type&lt;/span&gt; 17
+&lt;span class=&quot;c&quot;&gt;# dmidecode 3.2&lt;/span&gt;
+Getting SMBIOS data from sysfs.
+SMBIOS 2.7 present.
+
+Handle 0x1100, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 1
+        Locator: PROC 1 DIMM 1G
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1101, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 2
+        Locator: PROC 1 DIMM 2D
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1102, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 3
+        Locator: PROC 1 DIMM 3A
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1103, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 4
+        Locator: PROC 1 DIMM 4H
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1104, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 5
+        Locator: PROC 1 DIMM 5E
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+Handle 0x1105, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 6
+        Locator: PROC 1 DIMM 6B
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x1106, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 7
+        Locator: PROC 1 DIMM 7I
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1107, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 8
+        Locator: PROC 1 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1108, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+       Set: 9
+        Locator: PROC 1 DIMM 9C
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x1109, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 10
+        Locator: PROC 2 DIMM 1G
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110A, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+       Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 11
+        Locator: PROC 2 DIMM 2D
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110B, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 12
+        Locator: PROC 2 DIMM 3A
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+       Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110C, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 13
+        Locator: PROC 2 DIMM 4H
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110D, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 14
+        Locator: PROC 2 DIMM 5E
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x110E, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 15
+        Locator: PROC 2 DIMM 6B
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+
+Handle 0x110F, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 16
+        Locator: PROC 2 DIMM 7I
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1110, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 17
+        Locator: PROC 2 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+       Size: No Module Installed
+        Form Factor: DIMM
+        Set: 17
+        Locator: PROC 2 DIMM 8F
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: Unknown
+        Configured Memory Speed: Unknown
+
+Handle 0x1111, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 34 bytes
+Memory Device
+        Array Handle: 0x1001
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 18
+        Locator: PROC 2 DIMM 9C
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: 1333 MT/s
+        Manufacturer: Not Specified
+        Serial Number: Not Specified
+        Asset Tag: Not Specified
+        Part Number: Not Specified
+        Rank: 2
+        Configured Memory Speed: 1333 MT/s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+</description>
+        <pubDate>Sun, 05 Apr 2020 14:00:00 +0200</pubDate>
+        <link>https://gfraysse.github.io//configuration/2020/04/05/hp-proliant/</link>
+        <guid isPermaLink="true">https://gfraysse.github.io//configuration/2020/04/05/hp-proliant/</guid>
+        
+        <category>configuration</category>
+        
+        <category>hp</category>
+        
+        <category>debian</category>
+        
+        
+        <category>configuration</category>
+        
+      </item>
+    
+      <item>
+        <title>Configuring Debian Bullseye on a Dell PowerEdge R610</title>
+        <description>&lt;h2 id=&quot;dell-poweredge-r610&quot;&gt;Dell PowerEdge R610&lt;/h2&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /proc/cpuinfo
+
+processor       : 23
+vendor_id       : GenuineIntel
+cpu family      : 6
+model           : 44
+model name      : Intel&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;R&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; Xeon&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;R&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; CPU           X5650  @ 2.67GHz
+stepping        : 2
+microcode       : 0x1a
+cpu MHz         : 1595.545
+cache size      : 12288 KB
+physical &lt;span class=&quot;nb&quot;&gt;id&lt;/span&gt;     : 0
+siblings        : 12
+core &lt;span class=&quot;nb&quot;&gt;id&lt;/span&gt;         : 10
+cpu cores       : 6
+apicid          : 21
+initial apicid  : 21
+fpu             : &lt;span class=&quot;nb&quot;&gt;yes
+&lt;/span&gt;fpu_exception   : &lt;span class=&quot;nb&quot;&gt;yes
+&lt;/span&gt;cpuid level     : 11
+wp              : &lt;span class=&quot;nb&quot;&gt;yes
+&lt;/span&gt;flags           : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb r
+dtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 cx1
+6 xtpr pdcm pcid dca sse4_1 sse4_2 popcnt aes lahf_lm pti tpr_shadow vnmi flexpriority ept vpid dtherm ida arat
+bugs            : cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs
+bogomips        : 5319.92
+clflush size    : 64
+cache_alignment : 64
+address sizes   : 40 bits physical, 48 bits virtual
+power management:
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;free
+              total        used        free      shared  buff/cache   available
+Mem:       16475856      364224    14671304        9064     1440328    15761304
+Swap:      16760828           0    16760828
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;https://hwraid.le-vert.net/wiki/DebianPackages&lt;/li&gt;
+  &lt;li&gt;https://memo-linux.com/installer-openmanage-9-0-1-sur-debian-9-et-ubuntu-16-04/&lt;/li&gt;
+  &lt;li&gt;http://linux.dell.com/repo/community/openmanage/&lt;/li&gt;
+  &lt;li&gt;https://community.ttp://linux.dell.com/repo/community/openmanage/9spiceworks.com/topic/187823-install-ubuntu-on-dell-r610&lt;/li&gt;
+  &lt;li&gt;https://www.dell.com/community/Systems-Management-General/Poweredge-R610-fan-management-on-debian/td-p/4212811&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;apt-get &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;megactl
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;megasasctl 
+a0       PERC 6/i Integrated      encl:1 ldrv:1  batt:FAULT, charging
+a0d0       558GiB RAID 1   1x2  optimal
+a0e32s1     558GiB  a0d0  online
+a0e32s3     558GiB  a0d0  online
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;dmidecode &lt;span class=&quot;nt&quot;&gt;--type&lt;/span&gt; 17
+
+&lt;span class=&quot;c&quot;&gt;# dmidecode 3.2&lt;/span&gt;
+Getting SMBIOS data from sysfs.
+SMBIOS 2.6 present.
+
+Handle 0x1100, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 1
+        Locator: DIMM_A1 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous Registered &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Buffered&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        Speed: 1333 MT/s
+        Manufacturer: 00CE04B380CE
+        Serial Number: 854B2166
+        Asset Tag: 02104111
+        Part Number: M393B5170FH0-CH9
+        Rank: 2
+
+Handle 0x1101, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 1
+        Locator: DIMM_A2 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous Registered &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Buffered&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        Speed: 1333 MT/s
+        Manufacturer: 00CE00B380CE
+        Serial Number: 869A9D4E
+        Asset Tag: 02114563
+        Part Number: M393B5170GB0-CH9
+        Rank: 2
+
+Handle 0x1102, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 2
+        Locator: DIMM_A3 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x1103, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 2
+        Locator: DIMM_A4 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x1104, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 3
+        Locator: DIMM_A5 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x1105, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 3
+        Locator: DIMM_A6 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x1109, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 5
+        Locator: DIMM_B1 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous Registered &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Buffered&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        Speed: 1333 MT/s
+        Manufacturer: 00CE04B380CE
+        Serial Number: 33F0E945
+        Asset Tag: 02122521
+        Part Number: M393B5170GB0-CH9
+        Rank: 2
+
+Handle 0x110A, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: 4096 MB
+        Form Factor: DIMM
+        Set: 6
+        Locator: DIMM_B2 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous Registered &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;Buffered&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        Speed: 1333 MT/s
+        Manufacturer: 00CE04B380CE
+        Serial Number: 83522227
+        Asset Tag: 02104111
+        Part Number: M393B5170FH0-CH9
+        Rank: 2
+
+Handle 0x110B, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 6
+        Locator: DIMM_B3 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x110C, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 4
+        Locator: DIMM_B4 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x110D, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 5
+        Locator: DIMM_B5 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 5
+        Locator: DIMM_B5 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+
+Handle 0x110E, DMI &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;17, 28 bytes
+Memory Device
+        Array Handle: 0x1000
+        Error Information Handle: Not Provided
+        Total Width: 72 bits
+        Data Width: 64 bits
+        Size: No Module Installed
+        Form Factor: DIMM
+        Set: 6
+        Locator: DIMM_B6 
+        Bank Locator: Not Specified
+        Type: DDR3
+        Type Detail: Synchronous
+        Speed: Unknown
+        Manufacturer:
+        Serial Number:
+        Asset Tag:
+        Part Number:
+        Rank: Unknown
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+</description>
+        <pubDate>Sun, 05 Apr 2020 14:00:00 +0200</pubDate>
+        <link>https://gfraysse.github.io//configuration/2020/04/05/dell-r610/</link>
+        <guid isPermaLink="true">https://gfraysse.github.io//configuration/2020/04/05/dell-r610/</guid>
+        
+        <category>configuration</category>
+        
+        <category>dell</category>
+        
+        <category>debian</category>
+        
+        
+        <category>configuration</category>
+        
+      </item>
+    
+  </channel>
+</rss>
