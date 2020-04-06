@@ -1,7 +1,7 @@
 [
   
   {
-    "title"    : "Configuring LXC and OpenvSwitch on Debian between 2 servers",
+    "title"    : "Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers",
     "category" : "",
     "tags"     : "configuration, lxc, openvswitch",
     "url"      : "/configuration/2020/04/05/lxc-openvswitch/",

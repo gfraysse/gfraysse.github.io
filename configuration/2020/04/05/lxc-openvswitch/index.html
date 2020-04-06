@@ -4,7 +4,7 @@
     <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Configuring LXC and OpenvSwitch on Debian between 2 servers</title>
+<title>Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers</title>
 <meta name="description" content="Geeking, testings and musings">
 
 <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
@@ -85,7 +85,7 @@
       </div>
       
 
-      <h1 class="header" itemprop="name">Configuring LXC and OpenvSwitch on Debian between 2 servers</h1>
+      <h1 class="header" itemprop="name">Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers</h1>
 
       <div class="author">
         <small><i>
@@ -97,15 +97,22 @@
 
       <div class="read-time">
         <small>
-          6 minute read
+          7 minute read
         </small>
       </div>
-
       <div class="content-panel content">
 
         
 
-        <span itemprop="articleBody"><p>This article describes a full end-to-end lab configuration for running LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch and use LACP on two ethernet links to enable failover on the VLAN.</p>
+          <span itemprop="articleBody">
+	    	  <div id="table-of-contents">
+    <ul class="section-nav">
+<li class="toc-entry toc-h2"><a href="#bonding">Bonding</a></li>
+<li class="toc-entry toc-h2"><a href="#openvswitch">OpenvSwitch</a></li>
+<li class="toc-entry toc-h2"><a href="#lxc">LXC</a></li>
+</ul>
+  </div>
+	  <p>This article describes a full end-to-end lab configuration for running unprivileged (non-root) LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch and use LACP on two ethernet links to enable failover on the VLAN.</p>
 
 <p>The basic setup is two servers :</p>
 
@@ -114,21 +121,22 @@
   <li>a <a href="/configuration/2020/04/05/dell-r610/">Dell R610</a></li>
 </ul>
 
-<p>At time of writing, both run Debian 11 Bullseye with Linux kernel 5.4.0-4-amd64.</p>
+<p>At time of writing, both run <a href="https://www.debian.org/">Debian 11 Bullseye</a> with Linux kernel 5.4.0-4-amd64.</p>
 
-<p>Network configuration relies on a Netgear GS724TP switch</p>
+<p>Network configuration relies on a <a href="https://www.netgear.com/support/product/GS724TP.aspx">Netgear GS724TP switch</a>. This managed switch supports <a href="https://kb.netgear.com/000051185/What-are-link-aggregation-and-LACP-and-how-can-I-use-them-in-my-network">LACP</a> and <a href="https://kb.netgear.com/31026/How-to-configure-a-VLAN-on-a-NETGEAR-managed-switch">VLANs</a>.</p>
 
-<p>Each server has a first connection to the switch on one interface for the management network, i.e. connected via a gateway to the rest of the network.</p>
+<p>Each server has a first connection to the switch on one interface for the <em>management</em> network, i.e. connected via a gateway to the rest of the network. This is the interface used to connect to the server via ssh from my workstation.</p>
 
-<p>A lab network is also set-up for the containers or VM on the two servers. For this, two interfaces on each server are set-up as a bond interface, those two interfaces are connected to the switch on a dedicated VLAN (42). For the bonding to work, a Link Aggregation Group (LAG) is configured on the switch for each server.</p>
+<p>A <em>lab</em> network is also set-up for the containers or VM on the two servers. For this, two interfaces on each server are set-up as a <a href="https://wiki.debian.org/Bonding"><em>bond</em></a> interface, those two interfaces are connected to the switch on a dedicated VLAN (42). For the bonding to work, a Link Aggregation Group (LAG) is configured on the switch for each server.</p>
 
 <p><img src="/assets/images/servers.png" alt="Lab LAN" title="Lab LAN" /></p>
 
 <h2 id="bonding">Bonding</h2>
-<p>Enabling bonding on Linux is very simple</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Enabling bonding on Linux is very simple with the [*ifenslave*](https://packages.debian.org/bullseye/ifenslave)  package on Debian.
+</code></pre></div></div>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt-get <span class="nb">install </span>ifenslave
-<span class="nb">sudo </span>ifup bond0	
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>apt-get <span class="nb">install </span>ifenslave
+<span class="nv">$ </span><span class="nb">sudo </span>ifup bond0	
 </code></pre></div></div>
 
 <p>Then the content of the /etc/network/interfaces.d/setup file for the Dell R610:</p>
@@ -188,34 +196,34 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
 
 <h2 id="openvswitch">OpenvSwitch</h2>
 
-<p><a href="http://openvswitch.org/">Open vSwitch</a> is installed from the source <a href="https://www.openvswitch.org/releases/openvswitch-2.12.0.tar.gz">release 2.12.0</a> was the latest at the time of writing. Compilation and installation are straightforward:</p>
+<p><a href="http://openvswitch.org/">Open vSwitch</a> is installed from the source. <a href="https://www.openvswitch.org/releases/openvswitch-2.12.0.tar.gz">Release 2.12.0</a> was the latest at the time of writing. Compilation and installation are straightforward:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>./boot.sh
-<span class="nv">$ </span>./configure
-<span class="nv">$ </span>make <span class="nt">-j24</span>
-<span class="nv">$ </span>make <span class="nb">install</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo</span> ./boot.sh
+<span class="nv">$ </span><span class="nb">sudo</span> ./configure
+<span class="nv">$ </span><span class="nb">sudo </span>make <span class="nt">-j24</span>
+<span class="nv">$ </span><span class="nb">sudo </span>make <span class="nb">install</span>
 </code></pre></div></div>
 
-<p>Then start Open vSwitch</p>
+<p>Then start Open vSwitch:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">mkdir</span> <span class="nt">-p</span> /usr/local/etc/openvswitch
-<span class="nv">$ </span>ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
-<span class="nv">$ </span><span class="nb">mkdir</span> <span class="nt">-p</span> /usr/local/var/run/openvswitch
-<span class="nv">$ </span>/usr/local/sbin/ovsdb-server /usr/local/etc/openvswitch/conf.db <span class="nt">--log-file</span><span class="o">=</span>/tmp/ovsdb-server.log <span class="nt">--remote</span><span class="o">=</span>punix:/usr/local/var/run/openvswitch/db.sock <span class="nt">--remote</span><span class="o">=</span>db:Open_vSwitch,Open_vSwitch,manager_options <span class="nt">--private-key</span><span class="o">=</span>db:Open_vSwitch,SSL,private_key <span class="nt">--certificate</span><span class="o">=</span>db:Open_vSwitch,SSL,certificate <span class="nt">--bootstrap-ca-cert</span><span class="o">=</span>db:Open_vSwitch,SSL,ca_cert <span class="nt">--pidfile</span> <span class="nt">--detach</span> 	
-<span class="nv">$ </span>/usr/local/sbin/ovs-vswitchd <span class="nt">--pidfile</span> <span class="nt">--detach</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo mkdir</span> <span class="nt">-p</span> /usr/local/etc/openvswitch
+<span class="nv">$ </span><span class="nb">sudo </span>ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
+<span class="nv">$ </span><span class="nb">sudo mkdir</span> <span class="nt">-p</span> /usr/local/var/run/openvswitch
+<span class="nv">$ </span><span class="nb">sudo</span> /usr/local/sbin/ovsdb-server /usr/local/etc/openvswitch/conf.db <span class="nt">--log-file</span><span class="o">=</span>/tmp/ovsdb-server.log <span class="nt">--remote</span><span class="o">=</span>punix:/usr/local/var/run/openvswitch/db.sock <span class="nt">--remote</span><span class="o">=</span>db:Open_vSwitch,Open_vSwitch,manager_options <span class="nt">--private-key</span><span class="o">=</span>db:Open_vSwitch,SSL,private_key <span class="nt">--certificate</span><span class="o">=</span>db:Open_vSwitch,SSL,certificate <span class="nt">--bootstrap-ca-cert</span><span class="o">=</span>db:Open_vSwitch,SSL,ca_cert <span class="nt">--pidfile</span> <span class="nt">--detach</span> 	
+<span class="nv">$ </span><span class="nb">sudo</span> /usr/local/sbin/ovs-vswitchd <span class="nt">--pidfile</span> <span class="nt">--detach</span>
 </code></pre></div></div>
 
-<p>The commands above tell Open vSwitch to use the file /usr/local/etc/openvswitch/conf.db as the database and to listen on a unix socket /usr/local/var/run/openvswitch/db.sock and then astart the Open vSwitch daemon.</p>
+<p>The commands above tell Open vSwitch to use the file <em>/usr/local/etc/openvswitch/conf.db</em> as the database, to listen on a unix socket <em>/usr/local/var/run/openvswitch/db.sock</em> and then start the Open vSwitch daemon.</p>
 
-<p>We then create a bridge br42 and connect the bonded interface to it:</p>
+<p>We then create a bridge <em>br42</em> and connect the bond0 interface to it:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>/usr/local/bin/ovs-vsctl add-br br42
-<span class="nv">$ </span>/usr/local/bin/ovs-vsctl add-port br42 bond0
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo</span> /usr/local/bin/ovs-vsctl add-br br42
+<span class="nv">$ </span><span class="nb">sudo</span> /usr/local/bin/ovs-vsctl add-port br42 bond0
 </code></pre></div></div>
 
 <p>and finally we start the bridge, this will give an IP adress to the bridge:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>ifup br42
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>ifup br42
 </code></pre></div></div>
 
 <p>Now the configuration looks like that:</p>
@@ -241,17 +249,13 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
        </span>valid_lft forever preferred_lft forever
 </code></pre></div></div>
 
-<p>in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (eno3 and eno4 here) that constitute the bond.</p>
+<p>in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (<em>eno3</em> and <em>eno4</em> here) that constitute the bond.</p>
 
 <h2 id="lxc">LXC</h2>
 
-<p>For unprivileged containers</p>
+<p>The first step is to configure LXC to use Open vSwitch as the network bridge.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>sh <span class="nt">-c</span> <span class="s1">'echo "kernel.unprivileged_userns_clone=1" &gt; /etc/sysctl.d/80-lxc-userns.conf'</span>
-</code></pre></div></div>
-
-<p>Create an account for the unprivileged user</p>
-
+<p>Configure LXC, update the <em>/etc/lxc/default.conf</em> to look like that. Using Open vSwitch requires to declare <em>script.up</em> and <em>script.down</em> scripts :</p>
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/default.conf 
 	lxc.net.0.type <span class="o">=</span> veth
 	lxc.net.0.flags <span class="o">=</span> up
@@ -260,56 +264,71 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
 	lxc.apparmor.allow_nesting <span class="o">=</span> 1
 	lxc.net.0.script.up <span class="o">=</span> /etc/lxc/ovsup
 	lxc.net.0.script.down <span class="o">=</span> /etc/lxc/ovsdown
+</code></pre></div></div>
 
-<span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/ovsup 
+<p>Below the content of the two scripts to start and stop the connection to Open vSwitch:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/ovsup 
 	<span class="c">#!/bin/bash</span>
 	<span class="nv">BRIDGE</span><span class="o">=</span><span class="s2">"br42"</span>
-	ovs-vsctl <span class="nt">--may-exist</span> add-br <span class="nv">$BRIDGE</span>
-	ifconfig <span class="nv">$5</span> 0.0.0.0 up
-	ovs-vsctl <span class="nt">--if-exists</span> del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
-	ovs-vsctl <span class="nt">--may-exist</span> add-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+	<span class="nb">sudo</span> /usr/local/bin/ovs-vsctl <span class="nt">--may-exist</span> add-br <span class="nv">$BRIDGE</span>
+	<span class="nb">sudo</span> /sbin/ifconfig <span class="nv">$5</span> 0.0.0.0 up
+	<span class="nb">sudo</span> /usr/local/bin/ovs-vsctl <span class="nt">--if-exists</span> del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+	<span class="nb">sudo</span> /usr/local/bin/ovs-vsctl <span class="nt">--may-exist</span> add-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
 
 <span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/ovsdown
 	<span class="c">#!/bin/bash</span>
 
 	<span class="nv">BRIDGE</span><span class="o">=</span><span class="s2">"br42"</span>
-	ifdown <span class="nv">$5</span>
-	ovs-vsctl del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
+	<span class="nb">sudo</span> /sbin/ifdown <span class="nv">$5</span>
+	<span class="nb">sudo</span> /usr/local/bin/ovs-vsctl del-port <span class="nv">$BRIDGE</span> <span class="nv">$5</span>
 </code></pre></div></div>
 
-<p>File <em>~lxcunpriv/.config/lxc/default.conf</em></p>
+<p>Next step is to enable unprivileged users to create containers.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> ~lxcunpriv/.config/lxc/default.conf 
-    lxc.network.type <span class="o">=</span> veth
-    lxc.network.link <span class="o">=</span> br0
-    lxc.network.flags <span class="o">=</span> up
-    lxc.network.hwaddr <span class="o">=</span> 00:16:3e:xx:xx:xx
-    lxc.id_map <span class="o">=</span> u 0 165536 65536
-    lxc.id_map <span class="o">=</span> g 0 165536 65536
-</code></pre></div></div>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>useradd <span class="nt">-s</span> /sbin/bash <span class="nt">-c</span> <span class="s1">'unprivileged lxc user'</span> <span class="nt">-m</span> lxcunpriv
-
-<span class="nv">$ </span><span class="nb">sudo </span>sh <span class="nt">-c</span> <span class="s1">'echo "kernel.unprivileged_userns_clone=1" &gt; /etc/sysctl.d/80-lxc-userns.conf'</span>
+<p>Enable <em>kernel.unprivileged_userns_clone</em> in sysctl:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>sh <span class="nt">-c</span> <span class="s1">'echo "kernel.unprivileged_userns_clone=1" &gt; /etc/sysctl.d/80-lxc-userns.conf'</span>
 <span class="nv">$ </span><span class="nb">sudo </span>sysctl <span class="nt">--system</span>
+</code></pre></div></div>
 
-<span class="nv">$ </span><span class="nb">cat</span> /etc/subuid
+<p>Create an account for an unprivileged user <em>lxcunpriv</em>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>useradd <span class="nt">-s</span> /sbin/bash <span class="nt">-c</span> <span class="s1">'unprivileged LXC user'</span> <span class="nt">-m</span> lxcunpriv
+</code></pre></div></div>
+
+<p>It is then necesseray to declare the namespaces for this user, create or modify the files below:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /etc/subuid
 	lxcunpriv:165536:65536
-	<span class="nv">$ </span><span class="nb">cat</span> /etc/subgid
+<span class="nv">$ </span><span class="nb">cat</span> /etc/subgid
 	lxcunpriv:165536:65536
 
 <span class="nv">$ </span>setfacl <span class="nt">-m</span> u:165536:x /home/lxcunpriv/ /home/lxcunpriv/.local /home/lxcunpriv/.local/share
 	
-<span class="nv">$ </span>su lxcunpriv
 <span class="nv">$ </span><span class="nb">cat</span> /etc/lxc/lxc-usernet 
 	lxcunpriv veth br42 10
 </code></pre></div></div>
 
-<p><strong>todo</strong></p>
+<p>Create a <em>~lxcunpriv/.config/lxc/default.conf</em> file to declare the configuration of containers for the user:</p>
 
-<!-- setuid script for OvS -->
-<!-- chmod ug+s /etc/lxc/ovsup  -->
-<!-- chmod ug+s /etc/lxc/ovsdown -->
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> ~lxcunpriv/.config/lxc/default.conf 
+	lxc.include <span class="o">=</span> /etc/lxc/default.conf
+	lxc.idmap <span class="o">=</span> u 0 165536 65536
+	lxc.idmap <span class="o">=</span> g 0 165536 65536
+	<span class="c"># "Secure" mounting</span>
+	lxc.mount.auto <span class="o">=</span> proc:mixed sys:ro cgroup:mixed
+
+	<span class="c"># Network configuration</span>
+	lxc.net.0.type <span class="o">=</span> veth
+	lxc.net.0.link <span class="o">=</span> br42
+	lxc.net.0.flags <span class="o">=</span> up
+	lxc.net.0.hwaddr <span class="o">=</span> 00:FF:xx:xx:xx:xx
+</code></pre></div></div>
+
+<p><strong>TODO</strong></p>
+
+<!-- $ su lxcunpriv -->
+
+<!-- ADD lxcunpriv to /etc/sudoers -->
+<!-- lxcunpriv ALL = (ALL) NOPASSWD: /sbin/ifup, /sbin/ifdown,/usr/local/bin/ovs-vsctl, /etc/lxc/ovsup, /etc/lxc/ovsdown -->
 
 <!-- File *prep.sh* -->
 
@@ -349,24 +368,17 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
   <li><a href="https://linuxcontainers.org/lxc/getting-started/">https://linuxcontainers.org/lxc/getting-started/</a></li>
   <li><a href="https://wiki.debian.org/LXC">https://wiki.debian.org/LXC</a></li>
   <li><a href="https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/">https://sdn-lab.com/2013/11/14/setting-up-openvswitch-2-0-mininet-2-1/</a></li>
+  <li><a href="https://blog.scottlowe.org/2014/01/23/automatically-connecting-lxc-to-open-vswitch/">https://blog.scottlowe.org/2014/01/23/automatically-connecting-lxc-to-open-vswitch/</a></li>
+  <li><a href="https://infologs.wordpress.com/2015/06/19/how-to-attach-lxc-container-to-ovs-openvswitch/">https://infologs.wordpress.com/2015/06/19/how-to-attach-lxc-container-to-ovs-openvswitch/</a></li>
+  <li><a href="https://www.thegeekdiary.com/how-to-set-external-network-for-containers-in-linux-containers-lxc/">https://www.thegeekdiary.com/how-to-set-external-network-for-containers-in-linux-containers-lxc/</a></li>
+  <li><a href="http://www.linux-admins.net/2013/04/connecting-kvm-or-lxc-to-open-vswitch.html">http://www.linux-admins.net/2013/04/connecting-kvm-or-lxc-to-open-vswitch.html</a></li>
+  <li><a href="https://ilearnedhowto.wordpress.com/2016/09/16/how-to-create-a-overlay-network-using-open-vswitch-in-order-to-connect-lxc-containers/">https://ilearnedhowto.wordpress.com/2016/09/16/how-to-create-a-overlay-network-using-open-vswitch-in-order-to-connect-lxc-containers/</a></li>
+  <li><a href="https://ilearnedhowto.wordpress.com/2016/09/21/how-to-connect-complex-networking-infrastructures-with-open-vswitch-and-lxc-containers/">https://ilearnedhowto.wordpress.com/2016/09/21/how-to-connect-complex-networking-infrastructures-with-open-vswitch-and-lxc-containers/</a>
+<!-- https://angristan.xyz/setup-network-bridge-lxc-net/ -->
+<!-- https://wiki.debian.org/LXC/SimpleBridge --></li>
 </ul>
 
-<!-- Networking -->
-<!-- ---------- -->
-<!-- DNS ? -->
-<!-- DHCP ? -->
-<!-- subnet ? -->
-<!-- https://angristan.xyz/setup-network-bridge-lxc-net/ -->
-<!-- https://wiki.debian.org/LXC/SimpleBridge -->
-
-<!-- https://blog.scottlowe.org/2014/01/23/automatically-connecting-lxc-to-open-vswitch/ -->
-<!-- https://infologs.wordpress.com/2015/06/19/how-to-attach-lxc-container-to-ovs-openvswitch/ -->
-<!-- https://www.thegeekdiary.com/how-to-set-external-network-for-containers-in-linux-containers-lxc/ -->
-<!-- http://www.linux-admins.net/2013/04/connecting-kvm-or-lxc-to-open-vswitch.html -->
-
-<!-- https://ilearnedhowto.wordpress.com/2016/09/16/how-to-create-a-overlay-network-using-open-vswitch-in-order-to-connect-lxc-containers/ -->
-<!-- https://ilearnedhowto.wordpress.com/2016/09/21/how-to-connect-complex-networking-infrastructures-with-open-vswitch-and-lxc-containers/ -->
-</span>
+	  </span>
 
         
 
