@@ -1,7 +1,7 @@
 [
   
   {
-    "title"    : "Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers",
+    "title"    : "Unprivileged LXC containers with OpenvSwitch",
     "category" : "",
     "tags"     : "configuration, lxc, openvswitch",
     "url"      : "/configuration/2020/04/05/lxc-openvswitch/",
@@ -9,7 +9,7 @@
     } ,
     
   {
-    "title"    : "Configuring Debian on a HP Proliant G7",
+    "title"    : "Debian on a HP Proliant G7",
     "category" : "",
     "tags"     : "configuration, hp, debian",
     "url"      : "/configuration/2020/04/05/hp-proliant/",
@@ -17,7 +17,7 @@
     } ,
     
   {
-    "title"    : "Configuring Debian Bullseye on a Dell PowerEdge R610",
+    "title"    : "Debian Bullseye on a Dell PowerEdge R610",
     "category" : "",
     "tags"     : "configuration, dell, debian",
     "url"      : "/configuration/2020/04/05/dell-r610/",

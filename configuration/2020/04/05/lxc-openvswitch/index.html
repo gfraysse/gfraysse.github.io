@@ -4,7 +4,7 @@
     <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers</title>
+<title>Unprivileged LXC containers with OpenvSwitch</title>
 <meta name="description" content="Geeking, testings and musings">
 
 <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
@@ -85,7 +85,7 @@
       </div>
       
 
-      <h1 class="header" itemprop="name">Configuring unprivileged LXC and OpenvSwitch on Debian between 2 servers</h1>
+      <h1 class="header" itemprop="name">Unprivileged LXC containers with OpenvSwitch</h1>
 
       <div class="author">
         <small><i>
@@ -112,7 +112,9 @@
 <li class="toc-entry toc-h2"><a href="#lxc">LXC</a></li>
 </ul>
   </div>
-	  <p>This article describes a full end-to-end lab configuration for running unprivileged (non-root) LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch and use LACP on two ethernet links to enable failover on the VLAN.</p>
+	  <p><strong>This is still a draft, last part on how to enable an unprivileged user to create a vetch and connect it to OpenvSwitch is missing</strong></p>
+
+<p>This article describes a full end-to-end lab configuration for running unprivileged (non-root) LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch to provide an overlay network between the 2 servers and use LACP on two ethernet links to enable failover on the VLAN.</p>
 
 <p>The basic setup is two servers :</p>
 
@@ -295,7 +297,7 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">sudo </span>useradd <span class="nt">-s</span> /sbin/bash <span class="nt">-c</span> <span class="s1">'unprivileged LXC user'</span> <span class="nt">-m</span> lxcunpriv
 </code></pre></div></div>
 
-<p>It is then necesseray to declare the namespaces for this user, create or modify the files below:</p>
+<p>It is then necessary to declare the namespaces for this user, create or modify the files below:</p>
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /etc/subuid
 	lxcunpriv:165536:65536
 <span class="nv">$ </span><span class="nb">cat</span> /etc/subgid
