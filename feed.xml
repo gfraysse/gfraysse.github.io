@@ -5,13 +5,100 @@
     <description>Geeking, testings and musings</description>
     <link>https://gfraysse.github.io//</link>
     <atom:link href="https://gfraysse.github.io//feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 06 Apr 2020 18:26:39 +0200</pubDate>
-    <lastBuildDate>Mon, 06 Apr 2020 18:26:39 +0200</lastBuildDate>
+    <pubDate>Mon, 13 Apr 2020 16:50:01 +0200</pubDate>
+    <lastBuildDate>Mon, 13 Apr 2020 16:50:01 +0200</lastBuildDate>
     <generator>Jekyll v4.0.0</generator>
     
       <item>
+        <title>Isolation of multicast TV traffic for home internet access</title>
+        <description>&lt;p&gt;Moving into a new house with built-in RJ45 wall sockets, one could thing that setting up the network would be very easy.&lt;/p&gt;
+
+&lt;h2 id=&quot;the-problem&quot;&gt;The Problem&lt;/h2&gt;
+&lt;p&gt;My FAI (Orange in France) relies on multicast for the live TV and that is a pain in the a#!. The goal was to keep WiFi to a bare minimum and avoid multiple WiFi repeaters. We use as much as possible the RJ45 connections now available. But there is no simple way to configure the network using the cables runningin the house for multiple rooms in a clean way. Live TV relies on multicast which tends to send traffic to all the devices connected if you don’t configure it right. The FAI proposes WiFi repeaters as a solution to connect all devices. Multicast is not easy to handle and I quickly got fed up of having each device receiving the multicast stream everytime the TV was on. That is no problem for a desktop computer but it is more damaging for simpler devices that suddenly receive a HD stream.&lt;/p&gt;
+
+&lt;p&gt;The fiber provided by my FAI ends in my basement, next to the ethernet connnections for each of the rooms. Two options there:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;set-up the FAI router right there in the basement and connect all the rooms on the router. It required an additional switch to do it as there are only 5 port on my FAI router, but it is probably a viable option. BUT I didn’t want to have my router in my basement where it was far from reach in case I needed to reboot it. Also radio communication between the basement and the other floors is poor so it made it impossible to use the router WiFi or built-in DECT for the phone.&lt;/li&gt;
+  &lt;li&gt;set-up the FAI router in another room inside the house. This required to set-up a switch where the Fiber connection would be connected and connect all the other rooms to the switch. This leads to  require to set-up a switch in the room to connect both the FAI router and the wall sockets.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The configuration below isolates the multicast stream in a dedicated VLAN that is sent only to the room where the TV settop box is connected. The rest of the traffic, called “internet traffic”, uses another VLAN and is sent to all the other rooms. This way the live TV stream is received only in the room where the TV is. Other devices connected in the same room would still receive the multicast stream but it is not a problem in our setup.&lt;/p&gt;
+
+&lt;h2 id=&quot;configuration-on-the-side-of-the-fiber-optics-arrival&quot;&gt;Configuration on the side of the fiber optics arrival&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;an ONT is in the basement with FAI fiber directly attached to it. The RJ45 output is connected on port 1 of a 8-port switch.&lt;/li&gt;
+  &lt;li&gt;Attached to this switch are also all the ethernet cables connecting the house, one for each of the 5 rooms with RJ45 plugs.&lt;/li&gt;
+  &lt;li&gt;The switch is a &lt;a href=&quot;https://www.netgear.com/support/product/GS108Ev3.aspx&quot;&gt;Netgear GS108Ev3&lt;/a&gt;. Below are screenshots of the main configuration elements
+&lt;img src=&quot;/assets/images/switch-basement_information.png&quot; alt=&quot;switch-basement&quot; title=&quot;switch-basement information&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-basement_VLAN_802.1Q_configuration.png&quot; alt=&quot;switch-basement&quot; title=&quot;switch-basement 802.1Q configuration&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-basement_VLAN_802.1Q_port_PVID.png&quot; alt=&quot;switch-basement&quot; title=&quot;switch-basement 802.1Q PVID&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-basement_port_status.png&quot; alt=&quot;switch-basement&quot; title=&quot;switch-basement port status&quot; /&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;configuration-on-the-side-of-fai-router&quot;&gt;Configuration on the side of FAI router&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;The FAI router &lt;a href=&quot;https://boutique.orange.fr/informations/livebox-4/&quot;&gt;&lt;em&gt;Livebox 4&lt;/em&gt;&lt;/a&gt; is located in another room&lt;/li&gt;
+  &lt;li&gt;The switch in the Office is also a &lt;a href=&quot;https://www.netgear.com/support/product/GS108Ev3.aspx&quot;&gt;Netgear GS108Ev3&lt;/a&gt;. Below are screenshots of the main configuration elements
+&lt;img src=&quot;/assets/images/switch-office_information.png&quot; alt=&quot;switch-office&quot; title=&quot;switch-office information&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-office_vlan_802.1Q_configuration.png&quot; alt=&quot;switch-office&quot; title=&quot;switch-office 802.1Q configuration&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-office_vlan_802.1Q_port_PVID.png&quot; alt=&quot;switch-office&quot; title=&quot;switch-office 802.1Q PVID&quot; /&gt;
+&lt;img src=&quot;/assets/images/switch-office_port_status.png&quot; alt=&quot;switch-office&quot; title=&quot;switch-office port status&quot; /&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;the-vlans&quot;&gt;The VLANs&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;Network from the FAI at the output of the ONT uses multiple VLAN:
+    &lt;ul&gt;
+      &lt;li&gt;832 for everything but,&lt;/li&gt;
+      &lt;li&gt;840 for Live TV,&lt;/li&gt;
+      &lt;li&gt;838 for VoD ,&lt;/li&gt;
+      &lt;li&gt;852 for VoIP&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Live TV traffic on VLAN 840 relies on multicast&lt;/li&gt;
+  &lt;li&gt;To isolate the live TV streams, all the traffic is sent to the FAI router where it is then in turn split in two VLAN: 5 for the live TV, 1 for the rest
+&lt;img src=&quot;/assets/images/home_lan.png&quot; alt=&quot;LAN&quot; title=&quot;LAN&quot; /&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;wifi-hotspot&quot;&gt;WiFi hotspot&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;FAI router WiFi is turned OFF&lt;/li&gt;
+  &lt;li&gt;WiFi is provided by a &lt;a href=&quot;https://www.ui.com/unifi/unifi-ap-ac-lite/&quot;&gt;Ubiquiti UniFi UAC-AC-Lite&lt;/a&gt; Access Point connected by an ethernet cable in one of the rooms and turned on when needed only.&lt;/li&gt;
+  &lt;li&gt;It provides 802.11ac and 802.11n on 2.4 and 5 GHz radio&lt;/li&gt;
+  &lt;li&gt;The UniFI web UI is installed on a desktop computer and is not always on.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;why-so-complicated-and-why-not-use-igmp-snooping-&quot;&gt;Why so complicated and why not use IGMP snooping ?&lt;/h2&gt;
+&lt;p&gt;Why not IGMP snooping ? Because it does not work well on every brand of switches when you need to go through more than 1 switch. I tried to set-it up on the Netgear switches and shared my configuration with Netgear support which told me it can not work on these switches. I always ended up with the multicast stream sent to all devices connected to the switch. IGMP snooping does work fine when there is a single switch between the router and the settop box.&lt;/p&gt;
+
+&lt;p&gt;So in this set-up IGMP Snooping is disabled on switches, the live TV multicast is isolated in a dedicated VLAN 5. Which means that the only VLAN available on the RJ45 socket for the TV room is VLAN 5 for TV. It is possible to update the configuration to also send VLAN 1 for internet traffic to the room but in this case all equipment connected in the room would receive the multicast stream.&lt;/p&gt;
+
+&lt;p&gt;I guess a lot of people didn’t care to isolate the multicast traffic and have setups where the multicast stream is sent to all the connected devices in the house. It probably works fine for a lot of people. But some devices, especially if you have devices with 100Mbs connections in your home like IP camera, connected audio speakers, …  can get saturated by a HD stream and have unpredictable behaviors.&lt;/p&gt;
+
+&lt;p&gt;It is also possible to just have a WiFi connection between the router and the settop box. In my case it requires using a WiFi repeater or WiFI extender because the settopbox itself does not have WiFi support. But WiFi is not as reliable as cable connections and we got tired of having some loss of packets, even minor, in our HD streams.
+&lt;!-- $ pdf2svg home_lan.pdf  --&gt;
+&lt;!-- $ convert -background white -flatten -alpha off  home_lan.svg  ../content/images/home_lan.png --&gt;&lt;/p&gt;
+</description>
+        <pubDate>Mon, 13 Apr 2020 14:00:00 +0200</pubDate>
+        <link>https://gfraysse.github.io//configuration/2020/04/13/internet-access/</link>
+        <guid isPermaLink="true">https://gfraysse.github.io//configuration/2020/04/13/internet-access/</guid>
+        
+        <category>configuration</category>
+        
+        <category>FAI</category>
+        
+        <category>IGMP</category>
+        
+        <category>VLAN</category>
+        
+        
+        <category>configuration</category>
+        
+      </item>
+    
+      <item>
         <title>Unprivileged LXC containers with OpenvSwitch</title>
-        <description>&lt;p&gt;&lt;strong&gt;This is still a draft, last part on how to enable an unprivileged user to create a vetch and connect it to OpenvSwitch is missing&lt;/strong&gt;&lt;/p&gt;
+        <description>&lt;p&gt;&lt;strong&gt;This is still a draft, last part on how to enable an unprivileged user to create a veth and connect it to OpenvSwitch is missing&lt;/strong&gt;&lt;/p&gt;
 
 &lt;p&gt;This article describes a full end-to-end lab configuration for running unprivileged (non-root) LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch to provide an overlay network between the 2 servers and use LACP on two ethernet links to enable failover on the VLAN.&lt;/p&gt;
 
@@ -151,6 +238,18 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (&lt;em&gt;eno3&lt;/em&gt; and &lt;em&gt;eno4&lt;/em&gt; here) that constitute the bond.&lt;/p&gt;
+
+&lt;h2 id=&quot;nat&quot;&gt;NAT&lt;/h2&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c&quot;&gt;#!/bin/bash&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;IFACE_WAN&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;eno1
+&lt;span class=&quot;nv&quot;&gt;IFACE_LAN&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;br42
+&lt;span class=&quot;nv&quot;&gt;NETWORK_LAN&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;10.0.42.0/24
+&lt;span class=&quot;nb&quot;&gt;echo&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;1&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; /proc/sys/net/ipv4/ip_forward
+iptables &lt;span class=&quot;nt&quot;&gt;-t&lt;/span&gt; nat &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; POSTROUTING &lt;span class=&quot;nt&quot;&gt;-o&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$IFACE_WAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$NETWORK_LAN&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-d&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$NETWORK_LAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; MASQUERADE
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; FORWARD &lt;span class=&quot;nt&quot;&gt;-d&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$NETWORK_LAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$IFACE_WAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-o&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$IFACE_LAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; state &lt;span class=&quot;nt&quot;&gt;--state&lt;/span&gt; RELATED,ESTABLISHED &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; FORWARD &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$NETWORK_LAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; &lt;span class=&quot;nv&quot;&gt;$IFACE_LAN&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;h2 id=&quot;lxc&quot;&gt;LXC&lt;/h2&gt;
 

@@ -97,7 +97,7 @@
 
       <div class="read-time">
         <small>
-          7 minute read
+          8 minute read
         </small>
       </div>
       <div class="content-panel content">
@@ -109,10 +109,11 @@
     <ul class="section-nav">
 <li class="toc-entry toc-h2"><a href="#bonding">Bonding</a></li>
 <li class="toc-entry toc-h2"><a href="#openvswitch">OpenvSwitch</a></li>
+<li class="toc-entry toc-h2"><a href="#nat">NAT</a></li>
 <li class="toc-entry toc-h2"><a href="#lxc">LXC</a></li>
 </ul>
   </div>
-	  <p><strong>This is still a draft, last part on how to enable an unprivileged user to create a vetch and connect it to OpenvSwitch is missing</strong></p>
+	  <p><strong>This is still a draft, last part on how to enable an unprivileged user to create a veth and connect it to OpenvSwitch is missing</strong></p>
 
 <p>This article describes a full end-to-end lab configuration for running unprivileged (non-root) LXC containers on two different servers. Containers are connected to a dedicated VLAN available on both servers. The set-up relies on Open vSwitch to provide an overlay network between the 2 servers and use LACP on two ethernet links to enable failover on the VLAN.</p>
 
@@ -252,6 +253,18 @@ To enable the “Lab” LAN we need to configure the bonded interfaces. This is 
 </code></pre></div></div>
 
 <p>in this configuration only the bridge has an IP address. The bond0 interface does not have any, neither do the two interfaces (<em>eno3</em> and <em>eno4</em> here) that constitute the bond.</p>
+
+<h2 id="nat">NAT</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="nv">IFACE_WAN</span><span class="o">=</span>eno1
+<span class="nv">IFACE_LAN</span><span class="o">=</span>br42
+<span class="nv">NETWORK_LAN</span><span class="o">=</span>10.0.42.0/24
+<span class="nb">echo</span> <span class="s2">"1"</span> <span class="o">&gt;</span> /proc/sys/net/ipv4/ip_forward
+iptables <span class="nt">-t</span> nat <span class="nt">-A</span> POSTROUTING <span class="nt">-o</span> <span class="nv">$IFACE_WAN</span> <span class="nt">-s</span> <span class="nv">$NETWORK_LAN</span> <span class="o">!</span> <span class="nt">-d</span> <span class="nv">$NETWORK_LAN</span> <span class="nt">-j</span> MASQUERADE
+iptables <span class="nt">-A</span> FORWARD <span class="nt">-d</span> <span class="nv">$NETWORK_LAN</span> <span class="nt">-i</span> <span class="nv">$IFACE_WAN</span> <span class="nt">-o</span> <span class="nv">$IFACE_LAN</span> <span class="nt">-m</span> state <span class="nt">--state</span> RELATED,ESTABLISHED <span class="nt">-j</span> ACCEPT
+iptables <span class="nt">-A</span> FORWARD <span class="nt">-s</span> <span class="nv">$NETWORK_LAN</span> <span class="nt">-i</span> <span class="nv">$IFACE_LAN</span> <span class="nt">-j</span> ACCEPT
+</code></pre></div></div>
 
 <h2 id="lxc">LXC</h2>
 
