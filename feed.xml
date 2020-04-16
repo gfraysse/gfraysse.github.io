@@ -5,9 +5,206 @@
     <description>Geeking, testings and musings</description>
     <link>https://gfraysse.github.io//</link>
     <atom:link href="https://gfraysse.github.io//feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 13 Apr 2020 16:50:01 +0200</pubDate>
-    <lastBuildDate>Mon, 13 Apr 2020 16:50:01 +0200</lastBuildDate>
+    <pubDate>Thu, 16 Apr 2020 19:29:25 +0200</pubDate>
+    <lastBuildDate>Thu, 16 Apr 2020 19:29:25 +0200</lastBuildDate>
     <generator>Jekyll v4.0.0</generator>
+    
+      <item>
+        <title>Set-up Wireguard VPN on Amazon EC2 and GCP</title>
+        <description>&lt;p&gt;Configure &lt;a href=&quot;https://www.wireguard.com/&quot;&gt;WireGuard&lt;/a&gt; VPN server on free tier VM on Amazon EC2 and Google Cloud Platform.
+In this configuration the VPN network is 192.168.2.1/24.&lt;/p&gt;
+
+&lt;h2 id=&quot;amazon-ec2&quot;&gt;Amazon EC2&lt;/h2&gt;
+
+&lt;p&gt;Amazon &lt;a href=&quot;https://aws.amazon.com/free/&quot;&gt;offers one free VM for 12 months, i.e. 750 hours per month&lt;/a&gt; on its Elastic Cloud Compute (EC2) platform with its AWS Free TIer program.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;The &lt;a href=&quot;https://us-east-2.console.aws.amazon.com/console/home?region=us-east-2#&quot;&gt;Amazon EC2 management console&lt;/a&gt; allows you to configure your VMs&lt;/li&gt;
+  &lt;li&gt;The image must be of type &lt;em&gt;t2.micro&lt;/em&gt;: 1 vCPU, 1Gb RAM&lt;/li&gt;
+  &lt;li&gt;It will be located in zone US-East-2&lt;/li&gt;
+  &lt;li&gt;Choose an Amazon Linux Image, e.g. Amazon Linux 2 AMI 2.0.20190823.1 x86_64 HVM&lt;/li&gt;
+  &lt;li&gt;Create a Key Pair, once you have it you can connect to your VM
+    &lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ssh &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; ~/.ssh/my_key_pair.pem ec2-user@yourpublic_dns_name.us-east-2.compute.amazonaws.com
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Create a Security Group to allow ssh (port 22/TCP) and WireGuard connections on port 51820 UDP/TCP&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Install Wireguard:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;yum update
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;curl &lt;span class=&quot;nt&quot;&gt;-Lo&lt;/span&gt; /etc/yum.repos.d/wireguard.repo https://copr.fedorainfracloud.org/coprs/jdoss/wireguard/repo/epel-7/jdoss-wireguard-epel-7.repo&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;yum &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;epel-release wireguard-dkms wireguard-tools
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;yum clean all
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;yum &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;wireguard-dkms wireguard-tools iptables-services &lt;span class=&quot;nt&quot;&gt;-y&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo&lt;/span&gt; /sbin/modprobe wireguard
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Configure Wireguard:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;ip &lt;span class=&quot;nb&quot;&gt;link &lt;/span&gt;add dev wg0 &lt;span class=&quot;nb&quot;&gt;type &lt;/span&gt;wireguard
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;ip address add dev wg0 192.168.2.1/24
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;wg setconf wg0 myconfig.conf
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;wg genkey&amp;gt;  private
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;wg genkey&amp;lt;  private &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;public
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;wg &lt;span class=&quot;nb&quot;&gt;set &lt;/span&gt;wg0 private-key private
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;ip &lt;span class=&quot;nb&quot;&gt;link set &lt;/span&gt;wg0 up
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Create WireGuard configuration file:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo cat&lt;/span&gt; /etc/wireguard/wg0.conf 
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;Interface]
+Address &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 192.168.2.1/24
+SaveConfig &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true
+&lt;/span&gt;ListenPort &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 51820
+PrivateKey &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; yourprivatekey
+
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;Peer]
+PublicKey &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; somepublickey
+AllowedIPs &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 192.168.2.2/32
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo chown&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-v&lt;/span&gt; root:root /etc/wireguard/wg0.conf
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo chmod&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-v&lt;/span&gt; 600 /etc/wireguard/wg0.conf
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Configure your kernel. Create a sysctl configuration file to enable IP forwarding at each boot then load it:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat&lt;/span&gt; /etc/sysctl.d/98-wg.conf 
+net.ipv4.ip_forward&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;1
+net.ipv4.conf.all.forwarding &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 1
+net.ipv6.conf.all.forwarding &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 1
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;sysctl &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Configure the firewall on the VM to enable incoming connections as well as DNS connections:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;cat &lt;/span&gt;iptables.rules 
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; INPUT &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; RELATED,ESTABLISHED &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; FORWARD &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; RELATED,ESTABLISHED &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; INPUT &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; udp &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; udp &lt;span class=&quot;nt&quot;&gt;--dport&lt;/span&gt; 51820 &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; NEW &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; INPUT &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; 192.168.2.0/24 &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; tcp &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; tcp &lt;span class=&quot;nt&quot;&gt;--dport&lt;/span&gt; 53 &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; NEW &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; INPUT &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; 192.168.2.0/24 &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; udp &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; udp &lt;span class=&quot;nt&quot;&gt;--dport&lt;/span&gt; 53 &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; NEW &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+iptables &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; FORWARD &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; wg0 &lt;span class=&quot;nt&quot;&gt;-o&lt;/span&gt; wg0 &lt;span class=&quot;nt&quot;&gt;-m&lt;/span&gt; conntrack &lt;span class=&quot;nt&quot;&gt;--ctstate&lt;/span&gt; NEW &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; ACCEPT
+&lt;span class=&quot;c&quot;&gt;#Set up nat&lt;/span&gt;
+iptables &lt;span class=&quot;nt&quot;&gt;-t&lt;/span&gt; nat &lt;span class=&quot;nt&quot;&gt;-A&lt;/span&gt; POSTROUTING &lt;span class=&quot;nt&quot;&gt;-s&lt;/span&gt; 192.168.2.0/24 &lt;span class=&quot;nt&quot;&gt;-o&lt;/span&gt; eth0 &lt;span class=&quot;nt&quot;&gt;-j&lt;/span&gt; MASQUERADE
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Start WireGuard:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;wg-quick up wg0
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;systemctl &lt;span class=&quot;nb&quot;&gt;enable &lt;/span&gt;wg-quick@wg0.service
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;You can check the status of WireGuard:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;wg
+interface: wg0
+  public key: public_key
+  private key: &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;hidden&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  listening port: 51820
+
+peer: some_peer_public_key
+  endpoint: peer_ip_address:49539
+  allowed ips: 192.168.2.2/32
+  latest handshake: 61 days, 19 hours, 27 minutes, 40 seconds ago
+  transfer: 136.02 MiB received, 772.30 MiB sent
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Same thing once the 192.168.2.2 client is connected:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;wg
+interface: wg0
+  public key: public_key
+  private key: &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;hidden&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  listening port: 51820
+
+peer: some_peer_public_key
+  endpoint: peer_ip_address:55029
+  allowed ips: 192.168.2.2/32
+  latest handshake: 50 seconds ago
+  transfer: 136.13 MiB received, 772.54 MiB sent
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Now you can do a tcpdump to this that traffic is going through your VPN:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;sudo &lt;/span&gt;tcpdump &lt;span class=&quot;nt&quot;&gt;-s0&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-v&lt;/span&gt;  port not ssh and port not ntp &lt;span class=&quot;nt&quot;&gt;-i&lt;/span&gt; wg0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;or your can ping your endpoint or the VM itself:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-bash highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ping 192.168.2.1
+PING 192.168.2.1 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;192.168.2.1&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; 56&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;84&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; bytes of data.
+64 bytes from 192.168.2.1: &lt;span class=&quot;nv&quot;&gt;icmp_seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;1 &lt;span class=&quot;nv&quot;&gt;ttl&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;255 &lt;span class=&quot;nb&quot;&gt;time&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;0.028 ms
+64 bytes from 192.168.2.1: &lt;span class=&quot;nv&quot;&gt;icmp_seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;2 &lt;span class=&quot;nv&quot;&gt;ttl&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;255 &lt;span class=&quot;nb&quot;&gt;time&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;0.037 ms
+^C
+&lt;span class=&quot;nt&quot;&gt;---&lt;/span&gt; 192.168.2.1 ping statistics &lt;span class=&quot;nt&quot;&gt;---&lt;/span&gt;
+2 packets transmitted, 2 received, 0% packet loss, &lt;span class=&quot;nb&quot;&gt;time &lt;/span&gt;1003ms
+rtt min/avg/max/mdev &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0.028/0.032/0.037/0.007 ms
+
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;ping 192.168.2.2
+PING 192.168.2.2 &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;192.168.2.2&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; 56&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;84&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; bytes of data.
+64 bytes from 192.168.2.2: &lt;span class=&quot;nv&quot;&gt;icmp_seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;1 &lt;span class=&quot;nv&quot;&gt;ttl&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;64 &lt;span class=&quot;nb&quot;&gt;time&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;174 ms
+^C
+&lt;span class=&quot;nt&quot;&gt;---&lt;/span&gt; 192.168.2.2 ping statistics &lt;span class=&quot;nt&quot;&gt;---&lt;/span&gt;
+1 packets transmitted, 1 received, 0% packet loss, &lt;span class=&quot;nb&quot;&gt;time &lt;/span&gt;0ms
+rtt min/avg/max/mdev &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 174.724/174.724/174.724/0.000 ms
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;google-cloud-platform&quot;&gt;Google Cloud Platform&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;https://console.cloud.google.com&lt;/li&gt;
+  &lt;li&gt;Instance type: f1-micro (1 vCPU, 0.6 GB memory)&lt;/li&gt;
+  &lt;li&gt;Image: debian-10-buster-v20191014&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;strong&gt;todo&lt;/strong&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;useful-links&quot;&gt;Useful links&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;https://www.ckn.io/blog/2017/11/14/wireguard-vpn-typical-setup/&lt;/li&gt;
+  &lt;li&gt;https://free-for.dev&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Wed, 15 Apr 2020 14:00:00 +0200</pubDate>
+        <link>https://gfraysse.github.io//configuration/2020/04/15/wireguard-vpn-on-EC2-and-GCP/</link>
+        <guid isPermaLink="true">https://gfraysse.github.io//configuration/2020/04/15/wireguard-vpn-on-EC2-and-GCP/</guid>
+        
+        <category>configuration</category>
+        
+        <category>vpn</category>
+        
+        <category>wireguard</category>
+        
+        <category>cloud</category>
+        
+        <category>EC2</category>
+        
+        <category>GCP</category>
+        
+        
+        <category>configuration</category>
+        
+      </item>
     
       <item>
         <title>Isolation of multicast TV traffic for home internet access</title>

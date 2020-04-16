@@ -1,6 +1,14 @@
 [
   
   {
+    "title"    : "Set-up Wireguard VPN on Amazon EC2 and GCP",
+    "category" : "",
+    "tags"     : "configuration, vpn, wireguard, cloud, EC2, GCP",
+    "url"      : "/configuration/2020/04/15/wireguard-vpn-on-EC2-and-GCP/",
+    "date"     : "2020-04-15 14:00:00 +0200"
+    } ,
+    
+  {
     "title"    : "Isolation of multicast TV traffic for home internet access",
     "category" : "",
     "tags"     : "configuration, FAI, IGMP, VLAN",
