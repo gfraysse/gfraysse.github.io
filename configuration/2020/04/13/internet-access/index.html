@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Isolation of multicast TV traffic for home internet access</title>
+<meta name="description" content="Geeking, testings and musings">
+
+<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" media="all" href="/css/style.css" />
+<link rel="stylesheet" type="text/css" media="all" href="/css/jquery.mmenu.all.css" />
+<link rel="stylesheet" href="/css/highlightjs.piperita.css">
+
+<!-- Favicons generated at http://realfavicongenerator.net/ -->
+<link rel="apple-touch-icon" sizes="57x57" href="/favicons/apple-touch-icon-57x57.png">
+<link rel="apple-touch-icon" sizes="60x60" href="/favicons/apple-touch-icon-60x60.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/favicons/apple-touch-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="/favicons/apple-touch-icon-76x76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/favicons/apple-touch-icon-114x114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="/favicons/apple-touch-icon-120x120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/favicons/apple-touch-icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/favicons/apple-touch-icon-152x152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon-180x180.png">
+<link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="/favicons/android-chrome-192x192.png" sizes="192x192">
+<link rel="icon" type="image/png" href="/favicons/favicon-96x96.png" sizes="96x96">
+<link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+<link rel="manifest" href="/favicons/manifest.json">
+<link rel="shortcut icon" href="/favicons/favicon.ico">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="msapplication-TileImage" content="/favicons/mstile-144x144.png">
+<meta name="msapplication-config" content="/favicons/browserconfig.xml">
+<meta name="theme-color" content="#ffffff">
+
+
+
+
+
+</head>
+
+
+    <body>
+
+    <nav id="my-menu">
+  <div>
+    <p>Geeking, testings and musings</p>
+
+    <ul class="pages">
+      <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="/posts/"><i class="fa fa-archive"></i> All Posts</a></li>
+      <li><a href="/search/"><i class="fa fa-search"></i> Search</a></li>
+    </ul>
+
+    <p class="links">
+  
+  <a href="https://www.linkedin.com/in/gfraysse/" target="_new"><i class="fa fa-linkedin"></i></a>
+  
+  
+  
+  <a href="https://github.com/gfraysse" target="_new"><i class="fa fa-github-alt"></i></a>
+  <a href="https://stackoverflow.com/users/10927519/gfraysse" target="_new"><i class="fa fa-stack-overflow"></i></a>
+  
+  
+  <a href="/feed.xml" target="_new"><i class="fa fa-rss"></i></a>
+</p>
+
+  </div>
+</nav>
+<div class="menu-button" href="#menu"><i class="fa fa-bars"></i></div>
+
+
+    <div class="page-content">
+      <div class="wrap">
+      
+
+<div class="container-fluid single">
+  <div class="row">
+
+    <div itemscope itemtype="http://schema.org/Article" class="col-md-12 article">
+      
+      <div class="thumb">
+        <i class="fa fa-cogs fa-4x"></i>
+      </div>
+      
+
+      <h1 class="header" itemprop="name">Isolation of multicast TV traffic for home internet access</h1>
+
+      <div class="author">
+        <small><i>
+          
+          on <span itemprop="datePublished" content="2014-08-28">April 13, 2020</span>
+           under configuration
+        </i></small>
+      </div>
+
+      <div class="read-time">
+        <small>
+          5 minute read
+        </small>
+      </div>
+      <div class="content-panel content">
+
+        
+
+          <span itemprop="articleBody">
+	    	  <div id="table-of-contents">
+    <ul class="section-nav">
+<li class="toc-entry toc-h2"><a href="#the-problem">The Problem</a></li>
+<li class="toc-entry toc-h2"><a href="#configuration-on-the-side-of-the-fiber-optics-arrival">Configuration on the side of the fiber optics arrival</a></li>
+<li class="toc-entry toc-h2"><a href="#configuration-on-the-side-of-fai-router">Configuration on the side of FAI router</a></li>
+<li class="toc-entry toc-h2"><a href="#the-vlans">The VLANs</a></li>
+<li class="toc-entry toc-h2"><a href="#wifi-hotspot">WiFi hotspot</a></li>
+<li class="toc-entry toc-h2"><a href="#why-so-complicated-and-why-not-use-igmp-snooping-">Why so complicated and why not use IGMP snooping ?</a></li>
+</ul>
+  </div>
+	  <p>Moving into a new house with built-in RJ45 wall sockets, one could thing that setting up the network would be very easy.</p>
+
+<h2 id="the-problem">The Problem</h2>
+<p>My FAI (Orange in France) relies on multicast for the live TV and that is a pain in the a#!. The goal was to keep WiFi to a bare minimum and avoid multiple WiFi repeaters. We use as much as possible the RJ45 connections now available. But there is no simple way to configure the network using the cables runningin the house for multiple rooms in a clean way. Live TV relies on multicast which tends to send traffic to all the devices connected if you don’t configure it right. The FAI proposes WiFi repeaters as a solution to connect all devices. Multicast is not easy to handle and I quickly got fed up of having each device receiving the multicast stream everytime the TV was on. That is no problem for a desktop computer but it is more damaging for simpler devices that suddenly receive a HD stream.</p>
+
+<p>The fiber provided by my FAI ends in my basement, next to the ethernet connnections for each of the rooms. Two options there:</p>
+<ul>
+  <li>set-up the FAI router right there in the basement and connect all the rooms on the router. It required an additional switch to do it as there are only 5 port on my FAI router, but it is probably a viable option. BUT I didn’t want to have my router in my basement where it was far from reach in case I needed to reboot it. Also radio communication between the basement and the other floors is poor so it made it impossible to use the router WiFi or built-in DECT for the phone.</li>
+  <li>set-up the FAI router in another room inside the house. This required to set-up a switch where the Fiber connection would be connected and connect all the other rooms to the switch. This leads to  require to set-up a switch in the room to connect both the FAI router and the wall sockets.</li>
+</ul>
+
+<p>The configuration below isolates the multicast stream in a dedicated VLAN that is sent only to the room where the TV settop box is connected. The rest of the traffic, called “internet traffic”, uses another VLAN and is sent to all the other rooms. This way the live TV stream is received only in the room where the TV is. Other devices connected in the same room would still receive the multicast stream but it is not a problem in our setup.</p>
+
+<h2 id="configuration-on-the-side-of-the-fiber-optics-arrival">Configuration on the side of the fiber optics arrival</h2>
+<ul>
+  <li>an ONT is in the basement with FAI fiber directly attached to it. The RJ45 output is connected on port 1 of a 8-port switch.</li>
+  <li>Attached to this switch are also all the ethernet cables connecting the house, one for each of the 5 rooms with RJ45 plugs.</li>
+  <li>The switch is a <a href="https://www.netgear.com/support/product/GS108Ev3.aspx">Netgear GS108Ev3</a>. Below are screenshots of the main configuration elements
+<img src="/assets/images/switch-basement_information.png" alt="switch-basement" title="switch-basement information" />
+<img src="/assets/images/switch-basement_VLAN_802.1Q_configuration.png" alt="switch-basement" title="switch-basement 802.1Q configuration" />
+<img src="/assets/images/switch-basement_VLAN_802.1Q_port_PVID.png" alt="switch-basement" title="switch-basement 802.1Q PVID" />
+<img src="/assets/images/switch-basement_port_status.png" alt="switch-basement" title="switch-basement port status" /></li>
+</ul>
+
+<h2 id="configuration-on-the-side-of-fai-router">Configuration on the side of FAI router</h2>
+<ul>
+  <li>The FAI router <a href="https://boutique.orange.fr/informations/livebox-4/"><em>Livebox 4</em></a> is located in another room</li>
+  <li>The switch in the Office is also a <a href="https://www.netgear.com/support/product/GS108Ev3.aspx">Netgear GS108Ev3</a>. Below are screenshots of the main configuration elements
+<img src="/assets/images/switch-office_information.png" alt="switch-office" title="switch-office information" />
+<img src="/assets/images/switch-office_vlan_802.1Q_configuration.png" alt="switch-office" title="switch-office 802.1Q configuration" />
+<img src="/assets/images/switch-office_vlan_802.1Q_port_PVID.png" alt="switch-office" title="switch-office 802.1Q PVID" />
+<img src="/assets/images/switch-office_port_status.png" alt="switch-office" title="switch-office port status" /></li>
+</ul>
+
+<h2 id="the-vlans">The VLANs</h2>
+<ul>
+  <li>Network from the FAI at the output of the ONT uses multiple VLAN:
+    <ul>
+      <li>832 for everything but,</li>
+      <li>840 for Live TV,</li>
+      <li>838 for VoD ,</li>
+      <li>852 for VoIP</li>
+    </ul>
+  </li>
+  <li>Live TV traffic on VLAN 840 relies on multicast</li>
+  <li>To isolate the live TV streams, all the traffic is sent to the FAI router where it is then in turn split in two VLAN: 5 for the live TV, 1 for the rest
+<img src="/assets/images/home_lan.png" alt="LAN" title="LAN" /></li>
+</ul>
+
+<h2 id="wifi-hotspot">WiFi hotspot</h2>
+<ul>
+  <li>FAI router WiFi is turned OFF</li>
+  <li>WiFi is provided by a <a href="https://www.ui.com/unifi/unifi-ap-ac-lite/">Ubiquiti UniFi UAC-AC-Lite</a> Access Point connected by an ethernet cable in one of the rooms and turned on when needed only.</li>
+  <li>It provides 802.11ac and 802.11n on 2.4 and 5 GHz radio</li>
+  <li>The UniFI web UI is installed on a desktop computer and is not always on.</li>
+</ul>
+
+<h2 id="why-so-complicated-and-why-not-use-igmp-snooping-">Why so complicated and why not use IGMP snooping ?</h2>
+<p>Why not IGMP snooping ? Because it does not work well on every brand of switches when you need to go through more than 1 switch. I tried to set-it up on the Netgear switches and shared my configuration with Netgear support which told me it can not work on these switches. I always ended up with the multicast stream sent to all devices connected to the switch. IGMP snooping does work fine when there is a single switch between the router and the settop box.</p>
+
+<p>So in this set-up IGMP Snooping is disabled on switches, the live TV multicast is isolated in a dedicated VLAN 5. Which means that the only VLAN available on the RJ45 socket for the TV room is VLAN 5 for TV. It is possible to update the configuration to also send VLAN 1 for internet traffic to the room but in this case all equipment connected in the room would receive the multicast stream.</p>
+
+<p>I guess a lot of people didn’t care to isolate the multicast traffic and have setups where the multicast stream is sent to all the connected devices in the house. It probably works fine for a lot of people. But some devices, especially if you have devices with 100Mbs connections in your home like IP camera, connected audio speakers, …  can get saturated by a HD stream and have unpredictable behaviors.</p>
+
+<p>It is also possible to just have a WiFi connection between the router and the settop box. In my case it requires using a WiFi repeater or WiFI extender because the settopbox itself does not have WiFi support. But WiFi is not as reliable as cable connections and we got tired of having some loss of packets, even minor, in our HD streams.
+<!-- $ pdf2svg home_lan.pdf  -->
+<!-- $ convert -background white -flatten -alpha off  home_lan.svg  ../content/images/home_lan.png --></p>
+
+	  </span>
+
+        
+
+        
+
+        
+        <div class="tags">
+          <small>
+          <i class="fa fa-tags"></i>
+            configuration, FAI, IGMP, VLAN
+          </small>
+        </div>
+        
+
+      </div>
+
+      
+
+      
+
+      
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+      </div>
+    </div>
+
+    <div class="footer clearfix">
+  <div class="col-md-6">
+    
+  </div>
+  <div class="col-md-6">
+    
+  </div>
+</div>
+
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+<script src="/js/jquery.mmenu.min.all.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.7/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script type="text/javascript">
+   $(document).ready(function() {
+      $("#my-menu").mmenu().on( "closed.mm", function() {
+            $(".menu-button").show();
+         });
+      $(".menu-button").click(function() {
+        $(".menu-button").hide();
+        $("#my-menu").trigger("open.mm");
+      });
+   });
+</script>
+
+
+
+
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', '']);
+          _gaq.push(['_trackPageview']);
+  (function () {
+      var ga = document.createElement('script');
+      ga.type = 'text/javascript';
+      ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+
+
+    </body>
+</html>
